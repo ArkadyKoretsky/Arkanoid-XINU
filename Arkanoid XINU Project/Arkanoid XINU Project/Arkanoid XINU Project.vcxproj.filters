@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Source Files\Tests and game2 source files">
-      <UniqueIdentifier>{fcb7bbe9-7c9b-459e-8448-38c4106810c1}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Functions.c">
@@ -28,10 +25,10 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\TC\BIN\XINU2\NEWSRC\Arkanoid\test.c">
-      <Filter>Source Files\Tests and game2 source files</Filter>
+      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\..\..\..\TC\BIN\XINU2\NEWSRC\Arkanoid\game2.c">
-      <Filter>Source Files\Tests and game2 source files</Filter>
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
