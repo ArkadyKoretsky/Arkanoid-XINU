@@ -20,8 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\..\TC\BIN\XINU2\NEWSRC\Arkanoid\game2.c" />
-    <ClCompile Include="..\..\..\..\..\..\TC\BIN\XINU2\NEWSRC\Arkanoid\test.c" />
-    <ClCompile Include="..\..\..\~Test\test_r1.c" />
     <ClCompile Include="Functions.c" />
     <ClCompile Include="Interrupts.c" />
     <ClCompile Include="Main.c" />
