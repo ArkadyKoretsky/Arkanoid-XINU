@@ -15,28 +15,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Functions.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Main.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Interrupts.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_r1.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="clkint.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="game2.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Header.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClCompile Include="Arkanoid.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
