@@ -23,6 +23,7 @@
     <ClCompile Include="Functions.c" />
     <ClCompile Include="Interrupts.c" />
     <ClCompile Include="Main.c" />
+    <ClCompile Include="test_r1.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Header.h" />
