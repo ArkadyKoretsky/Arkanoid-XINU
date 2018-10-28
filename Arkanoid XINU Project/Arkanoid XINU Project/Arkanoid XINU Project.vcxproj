@@ -19,8 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\..\..\TC\BIN\XINU2\NEWSRC\Arkanoid\game2.c" />
+    <ClCompile Include="clkint.c" />
     <ClCompile Include="Functions.c" />
+    <ClCompile Include="game2.c" />
     <ClCompile Include="Interrupts.c" />
     <ClCompile Include="Main.c" />
     <ClCompile Include="test_r1.c" />

@@ -24,10 +24,13 @@
     <ClCompile Include="Interrupts.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\..\TC\BIN\XINU2\NEWSRC\Arkanoid\game2.c">
+    <ClCompile Include="test_r1.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_r1.c">
+    <ClCompile Include="clkint.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="game2.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
