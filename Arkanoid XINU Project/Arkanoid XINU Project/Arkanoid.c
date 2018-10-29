@@ -21,7 +21,7 @@ int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear =
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
 int BallOnRacket = 1;                                                                // flags
 char display_draft[25][160];
-volatile int RacketPosition, BallPosition;
+volatile int RacketPosition, ballPositionX, ballPositionY;
 unsigned char far* b800h;
 char display[4001], ch_arr[2048];
 
@@ -53,14 +53,14 @@ typedef struct position
 
 void DrawBall()
 {
-	display_draft[23][BallPosition] = 233;//'o';
-	display_draft[23][BallPosition + 1] = 4; // red
+	display_draft[ballPositionY][ballPositionX] = 233;//'o';
+	display_draft[ballPositionY][ballPositionX + 1] = 4; // red
 }
 
 void RemoveBall()
 {
-	b800h[BallPosition] = ' ';
-	b800h[BallPosition + 1] = 0; // black
+	display_draft[ballPositionY][ballPositionX] = ' ';
+	display_draft[ballPositionY][ballPositionX + 1] = 0;
 }
 
 void DrawRacket() /* drawing the racket on the screen */
@@ -87,18 +87,72 @@ void RemoveRacket() /* removing the parts of the racket and the ball */
 	}
 }
 
+int flag = 1;
+
 void MoveBallUp()
 {
 	// kprintf("shit");
 	BallOnRacket = 0;
-	while (b800h[BallPosition + 1 - 160] == 0) // going through black screen without bricks
+	while (b800h[ballPositionX + 1 - 160] == 0) // going through black screen without bricks
 	{
 		RemoveBall();
-		BallPosition -= 160;
-		kprintf("%d", BallPosition);
+		ballPositionX -= 160;
+		kprintf("%d", ballPositionX);
 		DrawBall();
 		// sleep(1);
 	}
+}
+
+void moveBallDownLeft()
+{
+	if (ballPositionY < 23 && ballPositionX>2)
+	{
+		RemoveBall();
+		ballPositionY++;
+		ballPositionX -= 2;
+		DrawBall();
+	}
+	else
+	{
+		flag = 1;
+	}
+}
+
+void moveBallDownRight()
+{
+	RemoveBall();
+	ballPositionY++;
+	ballPositionX += 2;
+	DrawBall();
+}
+
+
+void moveBallUpRight()
+{
+	if (ballPositionX < 198 && ballPositionY>1 && flag == 1 && display_draft[ballPositionY - 1][ballPositionX + 3] == 0)
+	{
+		RemoveBall();
+		ballPositionY--;
+		ballPositionX += 2;
+		DrawBall();
+	}
+	else
+	{
+		flag = 0;
+		send(receiver_pid, 'd');
+	}
+}
+
+void moveBallUpLeft()
+{
+	if (ballPositionX > 2)
+	{
+		RemoveBall();
+		ballPositionY--;
+		ballPositionX -= 2;
+		DrawBall();
+	}
+
 }
 
 INTPROC new_int9(int mdevno)
@@ -116,7 +170,7 @@ INTPROC new_int9(int mdevno)
 	} //asm
 		if (scan == 75)
 		{
-			result = 'a';
+			result = 'l';
 		}
 		else if (scan == 72)
 		{
@@ -124,7 +178,7 @@ INTPROC new_int9(int mdevno)
 		}
 		else if (scan == 77)
 		{
-			result = 'd';
+			result = 'r';
 		}
 	if ((scan == 46) && (ascii == 3)) // Ctrl-C?
 	{
@@ -193,17 +247,21 @@ void updater()
 				front++;
 			else
 				front = rear = -1;
-			if (((ch == 'a') || (ch == 'A')) && RacketPosition > 2)
+			if (((ch == 'l') || (ch == 'L')) && RacketPosition > 2)
 			{
 				display_draft[24][RacketPosition + 8] = ' ';
 				display_draft[24][RacketPosition + 8 + 1] = 0;
 				RacketPosition -= 2;
 			}
-			else if (((ch == 'd') || (ch == 'D')) && RacketPosition < 90)
+			else if (((ch == 'r') || (ch == 'R')) && RacketPosition < 90)
 			{
 				display_draft[24][RacketPosition] = ' ';
 				display_draft[24][RacketPosition + 1] = 0;
 				RacketPosition += 2;
+			}
+			else if (ch == 'd')
+			{
+				moveBallDownLeft();
 			}
 			/*
 			else if (ch == ' ')
@@ -219,6 +277,7 @@ void updater()
 			for (j = 0; j < 160; j++)
 				display[i * 160 + j] = display_draft[i][j];
 		display[4000] = '\0';
+		moveBallUpRight();
 	} // while(front != -1)
 }
 
@@ -329,7 +388,8 @@ void xmain()
 	int i, j, space = 0, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID;
 	char *arkanoid = "Arkanoid", *scoreLabel = "Score:";
 	RacketPosition = 46;//3886;
-	BallPosition = 50;//3730;
+	ballPositionX = 50;//3730;
+	ballPositionY = 23;
 	b800h = (unsigned char far*)0xB8000000;
 	/*
 	asm{
