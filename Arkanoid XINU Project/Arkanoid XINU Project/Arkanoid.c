@@ -2,7 +2,6 @@
 #include <kernel.h>
 #include <io.h>
 #include <bios.h>
-
 #define SizeOfRacket 10
 
 /*
@@ -17,32 +16,45 @@
 */
 
 extern SYSCALL sleept(int);
-extern struct intmap far *sys_imp;
+extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
-int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 }; // existing arrays
-int BallOnRacket = 1; // flags
+int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
+int BallOnRacket = 1;                                                                // flags
 char display_draft[25][160];
-volatile int RacketPosition = 3886, BallPosition = 3730;
+volatile int RacketPosition, BallPosition;
 unsigned char far* b800h;
 char display[4001], ch_arr[2048];
 
-enum color {
-	Gray = 128, White = 240, Orange = 192,
-	Blue = 16, Green = 32, Red = 64,
-	Yellow = 224, Purple = 80
+enum color
+{
+	Gray = 112,
+	White = 240,
+	Orange = 192,
+	Blue = 16,
+	Green = 32,
+	Red = 64,
+	Yellow = 224,
+	Purple = 80
 };
+
+/*
+b800h[1112] = (RacketPosition / 10) + '0';
+b800h[1113] = 32;
+b800h[1114] = RacketPosition % 10 + '0';
+b800h[1115] = 32;
+*/
 
 typedef struct position
 {
 	int x;
 	int y;
 
-}POSITION;
+} POSITION;
 
 void DrawBall()
 {
-	b800h[BallPosition] = 'o';
-	b800h[BallPosition + 1] = 4; // red
+	display_draft[23][BallPosition] = 233;//'o';
+	display_draft[23][BallPosition + 1] = 4; // red
 }
 
 void RemoveBall()
@@ -54,13 +66,13 @@ void RemoveBall()
 void DrawRacket() /* drawing the racket on the screen */
 {
 	int i;
-	for (i = 0; i < SizeOfRacket; i += 2) // drawing the racket
+	for (i = 0; i < SizeOfRacket; i += 2)
 	{
-		b800h[RacketPosition + i] = 220;
-		b800h[RacketPosition + i + 1] = 112;
+		display_draft[24][RacketPosition + i] = 220;
+		display_draft[24][RacketPosition + i + 1] = 112;
 	}
-	if (BallOnRacket)
-		DrawBall();
+	//if (BallOnRacket)
+	//DrawBall();
 }
 
 void RemoveRacket() /* removing the parts of the racket and the ball */
@@ -77,7 +89,7 @@ void RemoveRacket() /* removing the parts of the racket and the ball */
 
 void MoveBallUp()
 {
-	//kprintf("shit");
+	// kprintf("shit");
 	BallOnRacket = 0;
 	while (b800h[BallPosition + 1 - 160] == 0) // going through black screen without bricks
 	{
@@ -85,7 +97,7 @@ void MoveBallUp()
 		BallPosition -= 160;
 		kprintf("%d", BallPosition);
 		DrawBall();
-		//sleep(1);
+		// sleep(1);
 	}
 }
 
@@ -94,43 +106,33 @@ INTPROC new_int9(int mdevno)
 	char result = 0;
 	int scan = 0, ascii = 0;
 	asm{
-			PUSH AX
-			MOV AH, 1
-			INT 16h
-			JZ EndInterrupt
-			MOV AH, 0
-			INT 16h
-			MOV BYTE PTR scan, AH
-			MOV BYTE PTR ascii, AL
-			POP AX
+		MOV AH,1
+		INT 16h
+		JZ Skip1
+		MOV AH,0
+		INT 16h
+		MOV BYTE PTR scan,AH
+		MOV BYTE PTR ascii,AL
 	} //asm
-		if (scan == 75 && RacketPosition > 3842) // left arrow and not at the left corner
+		if (scan == 75)
 		{
-			/*RemoveRacket();
-			if (BallOnRacket)
-				BallPosition -= 2;
-			RacketPosition -= 2;
-			DrawRacket();*/
-			result = 'l';
+			result = 'a';
 		}
-		else if (scan == 77 && RacketPosition < 3930) // right arrow and not at the right corner
+		else if (scan == 72)
 		{
-			/*RemoveRacket();
-			if (BallOnRacket)
-				BallPosition += 2;
-			RacketPosition += 2;
-			DrawRacket();*/
-			result = 'r';
+			result = 'w';
 		}
-	/*else if (scan == 57) // space was pressed
+		else if (scan == 77)
+		{
+			result = 'd';
+		}
+	if ((scan == 46) && (ascii == 3)) // Ctrl-C?
 	{
-		result = ' ';
-		MoveBallUp();
-	}*/
-		else if ((scan == 46) && (ascii == 3)) // Ctrl-C?
-			asm{ INT 27 } // terminate xinu
+		asm INT 27; // terminate xinu
+	}
 	send(receiver_pid, result);
-EndInterrupt:
+
+Skip1:
 } // new_int9
 
 void set_new_int9_newisr()
@@ -145,39 +147,6 @@ void set_new_int9_newisr()
 
 } // set_new_int9_newisr
 
-void lvl1print()
-{
-	int i;
-	for (i = 0; i < 4000; i += 2)
-	{
-		if (i == 0)
-		{
-			b800h[i] = 201;
-			b800h[i + 1] = 112;
-		}
-		else if (i < 100) // upper row
-		{
-			b800h[i] = 205;
-			b800h[i + 1] = 112;
-		}
-		else if (i == 100)
-		{
-			b800h[i] = 187;
-			b800h[i + 1] = 112;
-		}
-		else if (i % 160 == 0 || (i + 60) % 160 == 0)
-		{
-			b800h[i] = 186;
-			b800h[i + 1] = 112;
-		}
-		else
-		{
-			b800h[i] = ' ';
-			b800h[i + 1] = 0;
-		}
-	}
-}
-
 void receiver()
 {
 	while (1)
@@ -188,7 +157,7 @@ void receiver()
 		ch_arr[rear] = temp;
 		if (front == -1)
 			front = 0;
-		//getc(CONSOLE);
+		// getc(CONSOLE);
 	} // while
 
 } //  receiver
@@ -199,14 +168,14 @@ void displayer(void)
 	while (1)
 	{
 		receive();
-		//sleept(18);
-		//printf(display);
-		for (i = 0; i < 2000; i++)
+		// sleept(18);
+		// printf(display);
+		for (i = 0; i < 4000; i += 2)
 		{
 			b800h[i] = display[i];
-			//b800h[i + 1] = display[i + 1];
+			b800h[i + 1] = display[i + 1];
 		}
-	} //while
+	} // while
 } // prntr
 
 void updater()
@@ -216,6 +185,7 @@ void updater()
 	while (1)
 	{
 		receive();
+
 		while (front != -1)
 		{
 			ch = ch_arr[front];
@@ -223,31 +193,116 @@ void updater()
 				front++;
 			else
 				front = rear = -1;
-			/*if ((ch == 'l') || (ch == 'L'))
+			if (((ch == 'a') || (ch == 'A')) && RacketPosition > 2)
 			{
-				RemoveRacket();
+				display_draft[24][RacketPosition + 8] = ' ';
+				display_draft[24][RacketPosition + 8 + 1] = 0;
 				RacketPosition -= 2;
-				DrawRacket();
-			}*/
-			/*else if ((ch == 'r') || (ch == 'R'))
+			}
+			else if (((ch == 'd') || (ch == 'D')) && RacketPosition < 90)
 			{
-				RemoveRacket();
+				display_draft[24][RacketPosition] = ' ';
+				display_draft[24][RacketPosition + 1] = 0;
 				RacketPosition += 2;
-				DrawRacket();
-			}*/
-			/*else if ((ch == 'w') || (ch == 'W'))
-				if (no_of_arrows < ARROW_NUMBER)
-				{
-					arrow_pos[no_of_arrows].x = gun_position;
-					arrow_pos[no_of_arrows].y = 23;
-					no_of_arrows++;*/
+			}
+			/*
+			else if (ch == ' ')
+			if (no_of_arrows < ARROW_NUMBER)
+			{
+			arrow_pos[no_of_arrows].x = gun_position;
+			arrow_pos[no_of_arrows].y = 23;
+			no_of_arrows++;	*/
 
-		} // if
+		} // if							
+		DrawRacket();
 		for (i = 0; i < 25; i++)
 			for (j = 0; j < 160; j++)
 				display[i * 160 + j] = display_draft[i][j];
 		display[4000] = '\0';
 	} // while(front != -1)
+}
+
+void frameDraw(int lvlDrawerPID) //draw the frame for the game
+{
+	int i, j;
+	for (i = 0; i < 25; i++)
+	{
+		for (j = 0; j < 160; j += 2)
+		{
+			if (j == 0 && i == 0)  //left corner
+			{
+				display_draft[i][j] = 201;
+				display_draft[i][j + 1] = 112;
+			}
+			else if (i == 0 && j < 100) //upper row
+			{
+				display_draft[i][j] = 205;
+				display_draft[i][j + 1] = 112;
+			}
+			else if (j == 100 && i == 0)  //right corner
+			{
+				display_draft[i][j] = 187;
+				display_draft[i][j + 1] = 112;
+			}
+			else if (j == 100 || j == 0)  //right and left sides
+			{
+				display_draft[i][j] = 186;
+				display_draft[i][j + 1] = 112;
+			}
+			else
+			{
+				display_draft[i][j] = ' ';
+				display_draft[i][j + 1] = 0;
+			}
+		}
+	}
+	send(lvlDrawerPID, 1); //send msg to lvl1drawder
+}
+
+void lvlDrawer()  //draw the first level
+{
+	int i, j, space = 0, msg = receive();
+	if (msg == 1) //receive from frameDraw
+	{
+		for (i = 0; i < 25; i++)
+		{
+			for (j = 0; j < 160; j += 2)
+			{
+				if (space == 0)
+				{
+					if (j > 1 && j < 100) {
+						if (i == 3)
+						{
+							display_draft[i][j + 1] = White;
+						}
+						else if (i == 4)
+						{
+							display_draft[i][j + 1] = Red;
+						}
+						else if (i == 5)
+						{
+							display_draft[i][j + 1] = Yellow;
+						}
+						else if (i == 6)
+						{
+							display_draft[i][j + 1] = Blue;
+						}
+						else if (i == 7)
+						{
+							display_draft[i][j + 1] = Green;
+						}
+						space = 1;
+					}
+				}
+				else
+				{
+					space = 0;
+				}
+			}
+		}
+		DrawRacket();
+		DrawBall();
+	}
 }
 
 SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
@@ -266,148 +321,57 @@ SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
 		iptr++;
 	} // for
 	restore(ps);
-} // schedule 
+} // schedule
 
 void xmain()
 {
 	int lvl1matrix[25][80] = { 0 };
-	int i, j, space = 0, uppid, dispid, recvpid;
+	int i, j, space = 0, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID;
 	char *arkanoid = "Arkanoid", *scoreLabel = "Score:";
+	RacketPosition = 46;//3886;
+	BallPosition = 50;//3730;
 	b800h = (unsigned char far*)0xB8000000;
+	/*
 	asm{
-			PUSH AX
-			XOR AH,AH
-			MOV AL,3
-			INT 10h
-			POP AX
-	}
-		//lvl1print();
-
-		//	int i, j;
-	for (i = 0; i < 50; i++)
-	{
-		for (j = 0; j < 160; j += 2)
-		{
-            kprintf("%d,%d\n",i,j);
-			if (j==0 && i==0)
-			{
-				display_draft[i][j] = 201;
-				display_draft[i][j + 1] = 112;
-			}
-            /*
-			else if (i*j < 100) // upper row
-			{
-				display_draft[i][j] = 205;
-				display_draft[i][j + 1] = 112;
-			}
-			else if (i*j == 100)
-			{
-				display_draft[i][j] = 187;
-				display_draft[i][j + 1] = 112;
-			}
-			else if (j == 50)
-			{
-				display_draft[i][j] = 186;
-				display_draft[i][j + 1] = 112;
-			}
-			else
-			{
-				display_draft[i][j] = ' ';
-				display_draft[i][j + 1] = 0;
-			}
-            */
-		}
-	}
+	PUSH AX
+	XOR AH,AH
+	MOV AL,3
+	INT 10h
+	POP AX
+	} */
+	/*
 
 	/*
-for (i = 17; i < 22; i++)  //only the upper half of the screen
-{
-	for (j = 1; j < 39; j++)
-	{
-		switch (i)
-		{
-		case 17:
-			lvl1matrix[i][j] = Gray;
-			break;
-		case 18:
-			lvl1matrix[i][j] = Red;
-			break;
-		case 19:
-			lvl1matrix[i][j] = Yellow;
-			break;
-		case 20:
-			lvl1matrix[i][j] = Blue;
-			break;
-		case 21:
-			lvl1matrix[i][j] = Green;
-			break;
-		}
-	}
-}
-*/
-	/*for (i = 0; i < 4000; i += 2)
-	{
-		//b800h[i] = '
-		if (space == 0)
-		{
-			if (i >= 482 && i <= 578)
-			{
-				b800h[i + 1] = White;
-			}
-			else if (i >= 642 && i <= 738)
-			{
-				b800h[i + 1] = Red;
-
-			}
-			else if (i >= 802 && i <= 898)
-			{
-				b800h[i + 1] = Yellow;
-
-			}
-			else if (i >= 962 && i <= 1058)
-			{
-				b800h[i + 1] = Blue;
-
-			}
-			else if (i >= 1122 && i <= 1218)
-			{
-				b800h[i + 1] = Green;
-
-			}
-			space = 1;
-		}
-		else
-		{
-			space = 0;
-		}
-	}
 	DrawRacket();
 	for (i = 286, j = 0; i < 302; j++, i += 2)				// draw arkanoid
 	{
-		b800h[i] = arkanoid[j];
-		b800h[i + 1] = White;
+	b800h[i] = arkanoid[j];
+	b800h[i + 1] = White;
 	}
 	for (i = 592, j = 0; i < 604; j++, i += 2) // draw score
 	{
-		b800h[i] = scoreLabel[j];
-		b800h[i + 1] = White;
+	b800h[i] = scoreLabel[j];
+	b800h[i + 1] = White;
 	}
 	for (i = 132; i < 138; i += 2) // draw life
 	{
-		b800h[i] = 3;
-		b800h[i + 1] = 4;
+	b800h[i] = 3;
+	b800h[i + 1] = 4;
 	}*/
+	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
+	resume(frameDrawPID = create(frameDraw, INITSTK, INITPRIO + 4, "FrameDraw", 1, lvlDrawerPID));
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
-	schedule(2, 10, dispid, 0, uppid, 5);
-	sleep(10);
-	asm{
-			PUSH AX
-			MOV AX, 2
-			INT 10h
-			POP AX
-	}
+	schedule(3, 10, dispid, 0, uppid, 5, frameDrawPID, 0);
+	//sleep(10);
+	/*
+	asm {
+	PUSH AX
+	MOV AX, 2
+	INT 10h
+	POP AX
+	}*/
 } // xmain
