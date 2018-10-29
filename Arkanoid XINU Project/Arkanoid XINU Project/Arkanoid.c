@@ -18,11 +18,13 @@
 
 extern SYSCALL sleept(int);
 extern struct intmap far *sys_imp;
-int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1;
-int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };
-volatile int RacketPosition = 3886;
+int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
+int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 }; // existing arrays
+int BallOnRacket = 1; // flags
+char display_draft[25][160];
+volatile int RacketPosition = 3886, BallPosition = 3730;
 unsigned char far* b800h;
-char display[2001], ch_arr[2048];
+char display[4001], ch_arr[2048];
 
 enum color {
 	Gray = 128, White = 240, Orange = 192,
@@ -30,27 +32,60 @@ enum color {
 	Yellow = 224, Purple = 80
 };
 
+typedef struct position
+{
+	int x;
+	int y;
+
+}POSITION;
+
+void DrawBall()
+{
+	b800h[BallPosition] = 'o';
+	b800h[BallPosition + 1] = 4; // red
+}
+
+void RemoveBall()
+{
+	b800h[BallPosition] = ' ';
+	b800h[BallPosition + 1] = 0; // black
+}
+
 void DrawRacket() /* drawing the racket on the screen */
 {
 	int i;
-	for (i = 0; i < 10; i += 2) // drawing the racket
+	for (i = 0; i < SizeOfRacket; i += 2) // drawing the racket
 	{
 		b800h[RacketPosition + i] = 220;
 		b800h[RacketPosition + i + 1] = 112;
 	}
-	b800h[RacketPosition - 156] = 'o'; //drawing the ball
-	b800h[RacketPosition - 156 + 1] = 4;
+	if (BallOnRacket)
+		DrawBall();
 }
 
 void RemoveRacket() /* removing the parts of the racket and the ball */
 {
 	int i;
-	b800h[RacketPosition - 156] = ' '; // deleting the ball
-	b800h[RacketPosition - 156 + 1] = 0;
+	if (BallOnRacket)
+		RemoveBall();
 	for (i = 0; i < SizeOfRacket; i += 2) // deleting the racket
 	{
 		b800h[RacketPosition + i] = ' ';
 		b800h[RacketPosition + i + 1] = 0;
+	}
+}
+
+void MoveBallUp()
+{
+	//kprintf("shit");
+	BallOnRacket = 0;
+	while (b800h[BallPosition + 1 - 160] == 0) // going through black screen without bricks
+	{
+		RemoveBall();
+		BallPosition -= 160;
+		kprintf("%d", BallPosition);
+		DrawBall();
+		//sleep(1);
 	}
 }
 
@@ -59,7 +94,7 @@ INTPROC new_int9(int mdevno)
 	char result = 0;
 	int scan = 0, ascii = 0;
 	asm{
-		PUSH AX
+			PUSH AX
 			MOV AH, 1
 			INT 16h
 			JZ EndInterrupt
@@ -67,36 +102,35 @@ INTPROC new_int9(int mdevno)
 			INT 16h
 			MOV BYTE PTR scan, AH
 			MOV BYTE PTR ascii, AL
+			POP AX
 	} //asm
 		if (scan == 75 && RacketPosition > 3842) // left arrow and not at the left corner
 		{
-			RemoveRacket();
+			/*RemoveRacket();
+			if (BallOnRacket)
+				BallPosition -= 2;
 			RacketPosition -= 2;
-			result = 'a';
-			DrawRacket();
+			DrawRacket();*/
+			result = 'l';
 		}
 		else if (scan == 77 && RacketPosition < 3930) // right arrow and not at the right corner
 		{
-			RemoveRacket();
+			/*RemoveRacket();
+			if (BallOnRacket)
+				BallPosition += 2;
 			RacketPosition += 2;
-			result = 'd';
-			DrawRacket();
+			DrawRacket();*/
+			result = 'r';
 		}
-		else if (scan == 57) // space was pressed
-		{
-			result = ' ';
-			// release the ball\fire lazers
-			goto EndInterrupt;
-		}
+	/*else if (scan == 57) // space was pressed
+	{
+		result = ' ';
+		MoveBallUp();
+	}*/
 		else if ((scan == 46) && (ascii == 3)) // Ctrl-C?
 			asm{ INT 27 } // terminate xinu
-		EndInterrupt:
 	send(receiver_pid, result);
-	asm{
-			MOV AL, 20h
-			OUT 20h, AL
-			POP AX
-	}
+EndInterrupt:
 } // new_int9
 
 void set_new_int9_newisr()
@@ -161,17 +195,24 @@ void receiver()
 
 void displayer(void)
 {
+	int i;
 	while (1)
 	{
 		receive();
 		//sleept(18);
 		//printf(display);
+		for (i = 0; i < 2000; i++)
+		{
+			b800h[i] = display[i];
+			//b800h[i + 1] = display[i + 1];
+		}
 	} //while
 } // prntr
 
 void updater()
 {
 	char ch;
+	int i, j;
 	while (1)
 	{
 		receive();
@@ -182,18 +223,18 @@ void updater()
 				front++;
 			else
 				front = rear = -1;
-			if ((ch == 'l') || (ch == 'L'))
+			/*if ((ch == 'l') || (ch == 'L'))
 			{
 				RemoveRacket();
 				RacketPosition -= 2;
 				DrawRacket();
-			}
-			else if ((ch == 'r') || (ch == 'R'))
+			}*/
+			/*else if ((ch == 'r') || (ch == 'R'))
 			{
 				RemoveRacket();
 				RacketPosition += 2;
 				DrawRacket();
-			}
+			}*/
 			/*else if ((ch == 'w') || (ch == 'W'))
 				if (no_of_arrows < ARROW_NUMBER)
 				{
@@ -202,8 +243,11 @@ void updater()
 					no_of_arrows++;*/
 
 		} // if
+		for (i = 0; i < 25; i++)
+			for (j = 0; j < 160; j++)
+				display[i * 160 + j] = display_draft[i][j];
+		display[4000] = '\0';
 	} // while(front != -1)
-
 }
 
 SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
@@ -237,7 +281,44 @@ void xmain()
 			INT 10h
 			POP AX
 	}
-	lvl1print();
+		//lvl1print();
+
+		//	int i, j;
+	for (i = 0; i < 50; i++)
+	{
+		for (j = 0; j < 160; j += 2)
+		{
+            kprintf("%d,%d\n",i,j);
+			if (j==0 && i==0)
+			{
+				display_draft[i][j] = 201;
+				display_draft[i][j + 1] = 112;
+			}
+            /*
+			else if (i*j < 100) // upper row
+			{
+				display_draft[i][j] = 205;
+				display_draft[i][j + 1] = 112;
+			}
+			else if (i*j == 100)
+			{
+				display_draft[i][j] = 187;
+				display_draft[i][j + 1] = 112;
+			}
+			else if (j == 50)
+			{
+				display_draft[i][j] = 186;
+				display_draft[i][j + 1] = 112;
+			}
+			else
+			{
+				display_draft[i][j] = ' ';
+				display_draft[i][j + 1] = 0;
+			}
+            */
+		}
+	}
+
 	/*
 for (i = 17; i < 22; i++)  //only the upper half of the screen
 {
@@ -264,7 +345,7 @@ for (i = 17; i < 22; i++)  //only the upper half of the screen
 	}
 }
 */
-	for (i = 0; i < 4000; i += 2)
+	/*for (i = 0; i < 4000; i += 2)
 	{
 		//b800h[i] = '
 		if (space == 0)
@@ -315,7 +396,7 @@ for (i = 17; i < 22; i++)  //only the upper half of the screen
 	{
 		b800h[i] = 3;
 		b800h[i + 1] = 4;
-	}
+	}*/
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
