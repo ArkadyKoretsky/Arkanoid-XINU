@@ -28,7 +28,7 @@ extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-int BallOnRacket = 1;                                                                // flags
+int BallOnRacket, MoveRightUp, BallMovingUpRight;                                                       // flags
 char display_draft[25][160];
 volatile int RacketPosition;
 unsigned char far* b800h;
@@ -54,13 +54,6 @@ b800h[1114] = RacketPosition % 10 + '0';
 b800h[1115] = 32;
 */
 
-typedef struct position
-{
-	int x;
-	int y;
-
-} POSITION;
-
 void DrawBall()
 {
 	display_draft[BallPosition.y][BallPosition.x] = 233; // 'o'
@@ -85,22 +78,15 @@ void DrawRacket() /* drawing the racket on the screen */
 		DrawBall();
 }
 
-void RemoveRacket() /* removing the parts of the racket and the ball */
+void RemoveRacket(int direction) /* removing the parts of the racket and the ball */
 {
 	display_draft[24][RacketPosition + direction] = ' ';
 	display_draft[24][RacketPosition + direction + 1] = 0;
 	if (BallOnRacket)
 		RemoveBall();
-	for (i = 0; i < SizeOfRacket; i += 2) // deleting the racket
-	{
-		b800h[RacketPosition + i] = ' ';
-		b800h[RacketPosition + i + 1] = 0;
-	}
 }
 
-int flag = 1;
-
-void MoveBallUp()
+/*void MoveBallUpStraight()
 {
 	if (b800h[BallPosition.x + 1 - 160] == 0) // going through black screen without bricks
 	{
@@ -234,14 +220,6 @@ void displayer(void)
 			b800h[i] = display[i];
 			b800h[i + 1] = display[i + 1];
 		}
-		b800h[1090] = (ballPositionX / 10) + '0';
-		b800h[1090 + 1] = 32;
-		b800h[1090 + 2] = ballPositionX % 10 + '0';
-		b800h[1090 + 3] = 32;
-		b800h[1250] = (ballPositionY / 10) + '0';
-		b800h[1250 + 1] = 32;
-		b800h[1250 + 2] = ballPositionY % 10 + '0';
-		b800h[1250 + 3] = 32;
 	} // while
 } // prntr
 
@@ -281,14 +259,16 @@ void updater()
 				moveBallDownLeft();
 			}
 			else if (ch == ' ')
-			if (no_of_arrows < ARROW_NUMBER)
 			{
-			arrow_pos[no_of_arrows].x = gun_position;
-			arrow_pos[no_of_arrows].y = 23;
-			no_of_arrows++;	*/
-
-		} // if							
-		DrawRacket();
+				if (BallOnRacket)
+				{
+					BallOnRacket = 0;
+					BallMovingUpRight = 1;
+				}
+			}
+			if(BallMovingUpRight)
+				moveBallUpRight();
+		} // while	
 		for (i = 0; i < 25; i++)
 			for (j = 0; j < 160; j++)
 				display[i * 160 + j] = display_draft[i][j];
