@@ -18,8 +18,8 @@
 extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
-int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-int BallOnRacket = 1;                                                                // flags
+int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 }; // existing arrays
+int BallOnRacket = 1, flag = 1; // flags
 char display_draft[25][160];
 volatile int RacketPosition, ballPositionX, ballPositionY;
 unsigned char far* b800h;
@@ -37,19 +37,20 @@ enum color
 	Purple = 80
 };
 
-/*
-b800h[1112] = (RacketPosition / 10) + '0';
-b800h[1113] = 32;
-b800h[1114] = RacketPosition % 10 + '0';
-b800h[1115] = 32;
-*/
-
 typedef struct position
 {
 	int x;
 	int y;
-
 } POSITION;
+
+typedef struct brick
+{
+	char enbale;
+	int x;
+	int y;
+	int score;
+	int hits;
+} Brick;
 
 void DrawBall()
 {
@@ -75,7 +76,9 @@ void DrawRacket() /* drawing the racket on the screen */
 	//DrawBall();
 }
 
-void RemoveRacket() /* removing the parts of the racket and the ball */
+
+/*
+void RemoveRacket() // removing the parts of the racket and the ball
 {
 	int i;
 	if (BallOnRacket)
@@ -86,8 +89,7 @@ void RemoveRacket() /* removing the parts of the racket and the ball */
 		b800h[RacketPosition + i + 1] = 0;
 	}
 }
-
-int flag = 1;
+*/
 
 void MoveBallUp()
 {
@@ -229,6 +231,14 @@ void displayer(void)
 			b800h[i] = display[i];
 			b800h[i + 1] = display[i + 1];
 		}
+		b800h[1090] = (ballPositionX / 10) + '0';
+		b800h[1090 + 1] = 32;
+		b800h[1090 + 2] = ballPositionX % 10 + '0';
+		b800h[1090 + 3] = 32;
+		b800h[1250] = (ballPositionY / 10) + '0';
+		b800h[1250 + 1] = 32;
+		b800h[1250 + 2] = ballPositionY % 10 + '0';
+		b800h[1250 + 3] = 32;
 	} // while
 } // prntr
 
@@ -273,6 +283,7 @@ void updater()
 
 		} // if							
 		DrawRacket();
+
 		for (i = 0; i < 25; i++)
 			for (j = 0; j < 160; j++)
 				display[i * 160 + j] = display_draft[i][j];
