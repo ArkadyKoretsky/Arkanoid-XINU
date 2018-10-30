@@ -42,6 +42,7 @@ char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife;
 unsigned char far* b800h;
 char display[4001], ch_arr[2048];
+int lifeCounter = 3;
 POSITION BallPosition;
 
 enum color
@@ -77,14 +78,31 @@ void RemoveBall()
 
 void DeleteLife()
 {
-	display_draft[5][PositionOfTheLastLife] = ' ';
-	display_draft[5][PositionOfTheLastLife + 1] = 0;
-	PositionOfTheLastLife -= 2;
-	RemoveBall();
-	BallPosition.y = 23;
-	BallPosition.x = RacketPosition + 4;
-	DrawBall();
-	BallOnRacket = 1;
+	char* gameOverStr = "Game Over";
+	int i, j;
+	lifeCounter--;
+	if (lifeCounter > 0)
+	{
+		display_draft[5][PositionOfTheLastLife] = ' ';
+		display_draft[5][PositionOfTheLastLife + 1] = 0;
+		PositionOfTheLastLife -= 2;
+		RemoveBall();
+		BallPosition.y = 23;
+		BallPosition.x = RacketPosition + 4;
+		DrawBall();
+		BallOnRacket = 1;
+	}
+	else
+	{
+		display_draft[5][PositionOfTheLastLife] = ' ';
+		display_draft[5][PositionOfTheLastLife + 1] = 0;
+		RemoveBall();
+		for (i = 0, j = 0; i < 18; i += 2, j++)
+		{
+			display_draft[16][42 + i] = gameOverStr[j];
+			display_draft[16][42 + 1 + i] = Purple;
+		}
+	}
 }
 
 void DrawRacket() /* drawing the racket on the screen */
