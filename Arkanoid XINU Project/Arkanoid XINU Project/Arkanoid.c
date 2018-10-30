@@ -127,6 +127,23 @@ void RemoveRacket(int direction) /* removing the parts of the racket and the bal
 		RemoveBall();
 }
 
+void BreakTheBrick(int i, int j)
+{
+	if (matrix[i][j / 2].enable == true)
+	{
+		if (matrix[i][j / 2].hits > 1)
+		{
+			matrix[i][j / 2].hits--;
+		}
+		else
+		{
+			score += matrix[i][j / 2].score;
+			display_draft[i][j] = ' ';
+			display_draft[i][j + 1] = 0;
+		}
+	}
+}
+
 void moveBallDownLeft()
 {
 	if (MoveLeftDown == 1 && display_draft[BallPosition.y + 1][BallPosition.x - 1] == 0 && BallPosition.y < 24)
@@ -144,7 +161,10 @@ void moveBallDownLeft()
 		else if (BallPosition.y > 23) // fell down
 			DeleteLife();
 		else
+		{
+			BreakTheBrick(BallPosition.y + 1, BallPosition.x - 2);
 			MoveLeftUp = 1;
+		}
 	}
 }
 
@@ -165,7 +185,10 @@ void moveBallDownRight()
 		else if (BallPosition.y > 23) // fell down
 			DeleteLife();
 		else
+		{
+			BreakTheBrick(BallPosition.y + 1, BallPosition.x + 2);
 			MoveRightUp = 1;
+		}
 	}
 }
 
@@ -185,21 +208,9 @@ void moveBallUpRight()
 			MoveLeftUp = 1;
 		else
 		{
-			if (matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].enable == true)
-			{
-				if (matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].hits > 1)
-				{
-					matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].hits--;
-				}
-				else
-				{
-					score += matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].score;
-					display_draft[BallPosition.y - 1][BallPosition.x + 2] = ' ';
-					display_draft[BallPosition.y - 1][BallPosition.x + 3] = 0;
-				}
-			}
+			BreakTheBrick(BallPosition.y - 1, BallPosition.x + 2);
+			MoveRightDown = 1;
 		}
-		MoveRightDown = 1;
 	}
 }
 
@@ -218,7 +229,10 @@ void moveBallUpLeft()
 		if (BallPosition.x == 2) // western wall
 			MoveRightUp = 1;
 		else
+		{
+			BreakTheBrick(BallPosition.y - 1, BallPosition.x - 2);
 			MoveLeftDown = 1;
+		}
 	}
 }
 
