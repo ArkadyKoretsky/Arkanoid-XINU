@@ -18,17 +18,18 @@
 * Purple = 8 / no points can't be destoryed.
 */
 
-typedef struct position
+typedef enum { false, true } bool;
+
+typedef struct Postion
 {
 	int x;
 	int y;
-} POSITION;
+} Postion;
 
 typedef struct brick
 {
-	char enbale;
-	int x;
-	int y;
+	bool enable;
+	//Postion cord;
 	int score;
 	int hits;
 } Brick;
@@ -37,24 +38,25 @@ extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown;                                    // flags
+int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, score;                                    // flags
 char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife;
 unsigned char far* b800h;
 char display[4001], ch_arr[2048];
+Brick matrix[25][80];
 int lifeCounter = 3;
-POSITION BallPosition;
+Postion BallPosition;
 
 enum color
 {
-	Gray = 112,
-	White = 240,
-	Orange = 192,
-	Blue = 16,
-	Green = 32,
-	Red = 64,
-	Yellow = 224,
-	Purple = 80
+	Gray = 7,
+	White = 15,
+	Orange = 13,
+	Blue = 1,
+	Green = 2,
+	Red = 4,
+	Yellow = 14,
+	Purple = 5
 };
 
 /*
@@ -80,7 +82,7 @@ void DeleteLife()
 {
 	char* gameOverStr = "Game Over";
 	int i, j;
-	lifeCounter--;
+	//lifeCounter--;
 	if (lifeCounter > 0)
 	{
 		display_draft[5][PositionOfTheLastLife] = ' ';
@@ -182,7 +184,22 @@ void moveBallUpRight()
 		if (BallPosition.x == 98) // eastern wall
 			MoveLeftUp = 1;
 		else
-			MoveRightDown = 1;
+		{
+			if (matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].enable == true)
+			{
+				if (matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].hits > 1)
+				{
+					matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].hits--;
+				}
+				else
+				{
+					score += matrix[BallPosition.y - 1][(BallPosition.x + 2) / 2].score;
+					display_draft[BallPosition.y - 1][BallPosition.x + 2] = ' ';
+					display_draft[BallPosition.y - 1][BallPosition.x + 3] = 0;
+				}
+			}
+		}
+		MoveRightDown = 1;
 	}
 }
 
@@ -386,8 +403,8 @@ void frameDraw(int lvlDrawerPID) //draw the frame for the game
 	/*
 	for (i = 592, j = 0; i < 604; j++, i += 2) // draw score
 	{
-		b800h[i] = scoreLabel[j];
-		b800h[i + 1] = White;
+	b800h[i] = scoreLabel[j];
+	b800h[i + 1] = White;
 	}			  */
 	for (i = 126, j = 0; i <= 138; j++, i += 2) // draw life
 	{
@@ -404,6 +421,14 @@ void frameDraw(int lvlDrawerPID) //draw the frame for the game
 }
 
 
+void updateBrickMatirx(int i, int j, bool state, int hits, int score)
+{
+	matrix[i][j].enable = state;
+	matrix[i][j].hits = hits;
+	matrix[i][j].score = score;
+}
+
+
 void lvlDrawer()  //draw the first level
 {
 	int i, j, space = 0, msg = receive();
@@ -415,26 +440,33 @@ void lvlDrawer()  //draw the first level
 			{
 				if (space == 0)
 				{
-					if (j > 1 && j < 100) {
+					if (j > 1 && j < 100 && i > 0)
+					{
+						display_draft[i][j] = 219;
 						if (i == 3)
 						{
-							display_draft[i][j + 1] = White;
+							display_draft[i][j + 1] = Gray;
+							updateBrickMatirx(i, j / 2, true, 1, 60);
 						}
 						else if (i == 4)
 						{
 							display_draft[i][j + 1] = Red;
+							updateBrickMatirx(i, j / 2, true, 2, 90);
 						}
 						else if (i == 5)
 						{
 							display_draft[i][j + 1] = Yellow;
+							updateBrickMatirx(i, j / 2, true, 1, 120);
 						}
 						else if (i == 6)
 						{
 							display_draft[i][j + 1] = Blue;
+							updateBrickMatirx(i, j / 2, true, 1, 70);
 						}
 						else if (i == 7)
 						{
 							display_draft[i][j + 1] = Green;
+							updateBrickMatirx(i, j / 2, true, 2, 80);
 						}
 						space = 1;
 					}
@@ -470,6 +502,16 @@ SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
 
 void InitializeGlobalVariables()
 {
+	asm{
+		PUSH AX
+		PUSH DX
+		MOV DX,3D4h
+		MOV AL,11
+		OUT DX,AX
+		POP DX
+		POP AX
+	}
+	score = 0;
 	BallPosition.x = 50; // 3730
 	BallPosition.y = 23;
 	RacketPosition = 46; // 3886
@@ -479,38 +521,27 @@ void InitializeGlobalVariables()
 	PositionOfTheLastLife = 134;
 }
 
+
+void initBrick()
+{
+	int i, j;
+	for (i = 0; i < 25; i++)
+	{
+		for (j = 0; j < 80; j++)
+		{
+			matrix[i][j].enable = false;
+			matrix[i][j].hits = -1;
+			matrix[i][j].score = -1;
+		}
+	}
+}
+
 void xmain()
 {
 	int lvl1matrix[25][80] = { 0 };
 	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID;
 	InitializeGlobalVariables();
-	/*
-	asm{
-	PUSH AX
-	XOR AH,AH
-	MOV AL,3
-	INT 10h
-	POP AX
-	} */
-	/*
-
-	/*
-	DrawRacket();
-	for (i = 286, j = 0; i < 302; j++, i += 2)				// draw arkanoid
-	{
-	b800h[i] = arkanoid[j];
-	b800h[i + 1] = White;
-	}
-	for (i = 592, j = 0; i < 604; j++, i += 2) // draw score
-	{
-	b800h[i] = scoreLabel[j];
-	b800h[i + 1] = White;
-	}
-	for (i = 132; i < 138; i += 2) // draw life
-	{
-	b800h[i] = 3;
-	b800h[i + 1] = 4;
-	}*/
+	initBrick();
 	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
 	resume(frameDrawPID = create(frameDraw, INITSTK, INITPRIO + 4, "FrameDraw", 1, lvlDrawerPID));
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
@@ -518,7 +549,7 @@ void xmain()
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
-	schedule(2, 1, dispid, 0, uppid, 0, frameDrawPID, 0);
+	schedule(3, 1, dispid, 0, uppid, 0, frameDrawPID, 0);
 	//sleep(10);
 	/*
 	asm {
