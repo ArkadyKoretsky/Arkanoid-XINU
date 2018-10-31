@@ -2,6 +2,8 @@
 #include <kernel.h>
 #include <io.h>
 #include <bios.h>
+#include <string.h>
+
 
 #define SizeOfRacket 10
 #define Right 8
@@ -19,35 +21,7 @@
 */
 
 typedef enum { false, true } bool;
-
-typedef struct Postion
-{
-	int x;
-	int y;
-} Postion;
-
-typedef struct brick
-{
-	bool enable;
-	//Postion cord;
-	int score;
-	int hits;
-} Brick;
-
-extern SYSCALL sleept(int);
-extern struct intmap far* sys_imp;
-int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
-int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, score;                                    // flags
-char display_draft[25][160];
-volatile int RacketPosition, PositionOfTheLastLife;
-unsigned char far* b800h;
-char display[4001], ch_arr[2048];
-Brick matrix[25][80];
-int lifeCounter = 3;
-Postion BallPosition;
-
-enum color
+typedef enum color
 {
 	Gray = 7,
 	White = 15,
@@ -56,8 +30,36 @@ enum color
 	Green = 2,
 	Red = 4,
 	Yellow = 14,
-	Purple = 5
-};
+	Purple = 5,
+	Black = 0
+} color;
+
+typedef struct Position
+{
+	int x;
+	int y;
+} Position;
+
+typedef struct brick
+{
+	bool enable;
+	int score;
+	int hits;
+	color surprise;
+} Brick;
+
+extern SYSCALL sleept(int);
+extern struct intmap far* sys_imp;
+int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
+int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
+int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, score, surprise;                                    // flags
+char display_draft[25][160];
+volatile int RacketPosition, PositionOfTheLastLife;
+unsigned char far* b800h;
+char display[4001], ch_arr[2048];
+Brick matrix[25][80];
+int lifeCounter;
+Position BallPosition, surprisePosition;
 
 /*
 b800h[1112] = (RacketPosition / 10) + '0';
@@ -65,6 +67,30 @@ b800h[1113] = 32;
 b800h[1114] = RacketPosition % 10 + '0';
 b800h[1115] = 32;
 */
+
+void printScore(int score)
+{
+	int i, j;
+	char str[7];
+	sprintf(str, "%d", score);
+	for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
+	{
+		display_draft[8][i] = str[j];
+		display_draft[8][i + 1] = White;
+	}
+}
+
+void removeSurprise()
+{
+	display_draft[surprisePosition.y][surprisePosition.x] = ' ';
+	display_draft[surprisePosition.y][surprisePosition.x + 1] = 0;
+}
+
+void drawSurprise(color surprise)
+{
+	display_draft[surprisePosition.y][surprisePosition.x] = 1; // 'o'
+	display_draft[surprisePosition.y][surprisePosition.x + 1] = surprise; // red
+}
 
 void DrawBall()
 {
@@ -82,7 +108,7 @@ void DeleteLife()
 {
 	char* gameOverStr = "Game Over";
 	int i, j;
-	//lifeCounter--;
+	lifeCounter--;
 	if (lifeCounter > 0)
 	{
 		display_draft[5][PositionOfTheLastLife] = ' ';
@@ -138,8 +164,23 @@ void BreakTheBrick(int i, int j)
 		else
 		{
 			score += matrix[i][j / 2].score;
+			printScore(score);
 			display_draft[i][j] = ' ';
 			display_draft[i][j + 1] = 0;
+			if (matrix[i][j].surprise != Black)
+			{
+				matrix[i][j].surprise = Black;
+				while (i++ < 24)
+				{
+					if (display_draft[i][j] == ' ')
+					{
+						display_draft[i][j] = ' ';
+						display_draft[i][j + 1] = 0;
+						display_draft[i + 1][j] = 1;
+						display_draft[i + 1][j + 1] = Green;
+					}
+				}
+			}
 		}
 	}
 }
@@ -414,12 +455,11 @@ void frameDraw(int lvlDrawerPID) //draw the frame for the game
 		display_draft[1][i] = arkanoid[j];
 		display_draft[1][i + 1] = White;
 	}
-	/*
-	for (i = 592, j = 0; i < 604; j++, i += 2) // draw score
+	for (i = 592 + 4, j = 0; i < 604 + 4; j++, i += 2) // draw score
 	{
-	b800h[i] = scoreLabel[j];
-	b800h[i + 1] = White;
-	}			  */
+		display_draft[8][i] = scoreLabel[j];
+		display_draft[8][i + 1] = White;
+	}
 	for (i = 126, j = 0; i <= 138; j++, i += 2) // draw life
 	{
 		display_draft[4][i] = lives[j];
@@ -435,11 +475,17 @@ void frameDraw(int lvlDrawerPID) //draw the frame for the game
 }
 
 
-void updateBrickMatirx(int i, int j, bool state, int hits, int score)
+void updateBrickMatrix(int i, int j, bool state, int hits, int score)
 {
 	matrix[i][j].enable = state;
 	matrix[i][j].hits = hits;
 	matrix[i][j].score = score;
+	matrix[i][j].surprise = Black;
+}
+
+void updateSurprises(int i, int j, color color)
+{
+	matrix[i][j].surprise = color;
 }
 
 
@@ -452,48 +498,50 @@ void lvlDrawer()  //draw the first level
 		{
 			for (j = 0; j < 160; j += 2)
 			{
-				if (space == 0)
+				//if (space == 0)
+				//{
+				if (j > 20 && j < 80 && i > 0)
 				{
-					if (j > 1 && j < 100 && i > 0)
+					display_draft[i][j] = 254;
+					if (i == 3)
 					{
-						display_draft[i][j] = 219;
-						if (i == 3)
-						{
-							display_draft[i][j + 1] = Gray;
-							updateBrickMatirx(i, j / 2, true, 1, 60);
-						}
-						else if (i == 4)
-						{
-							display_draft[i][j + 1] = Red;
-							updateBrickMatirx(i, j / 2, true, 2, 90);
-						}
-						else if (i == 5)
-						{
-							display_draft[i][j + 1] = Yellow;
-							updateBrickMatirx(i, j / 2, true, 1, 120);
-						}
-						else if (i == 6)
-						{
-							display_draft[i][j + 1] = Blue;
-							updateBrickMatirx(i, j / 2, true, 1, 70);
-						}
-						else if (i == 7)
-						{
-							display_draft[i][j + 1] = Green;
-							updateBrickMatirx(i, j / 2, true, 2, 80);
-						}
-						space = 1;
+						display_draft[i][j + 1] = Gray;
+						updateBrickMatrix(i, j / 2, true, 1, 60);
 					}
-				}
-				else
-				{
-					space = 0;
+					else if (i == 4)
+					{
+						display_draft[i][j + 1] = Red;
+						updateBrickMatrix(i, j / 2, true, 2, 90);
+					}
+					else if (i == 5)
+					{
+						display_draft[i][j + 1] = Yellow;
+						updateBrickMatrix(i, j / 2, true, 1, 120);
+					}
+					else if (i == 6)
+					{
+						display_draft[i][j + 1] = Blue;
+						updateBrickMatrix(i, j / 2, true, 2, 70);
+					}
+					else if (i == 7)
+					{
+						display_draft[i][j + 1] = Green;
+						updateBrickMatrix(i, j / 2, true, 1, 80);
+						updateSurprises(i, j / 2, Green);
+					}
+					//	space = 1;
 				}
 			}
+			//else
+			//{
+			//space = 0;
+			//}
 		}
-		DrawRacket();
-		DrawBall();
 	}
+	DrawRacket();
+	DrawBall();
+
+
 }
 
 SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
@@ -533,6 +581,7 @@ void InitializeGlobalVariables()
 	BallOnRacket = 1;
 	MoveRightDown = MoveLeftDown = MoveLeftUp = MoveRightUp = 0;
 	PositionOfTheLastLife = 134;
+	lifeCounter = 3;
 }
 
 
