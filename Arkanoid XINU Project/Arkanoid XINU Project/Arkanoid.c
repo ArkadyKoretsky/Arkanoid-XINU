@@ -21,6 +21,7 @@
 */
 
 typedef enum { false, true } bool;
+
 typedef enum color
 {
 	Gray = 7,
@@ -52,14 +53,14 @@ extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, score, surprise;                                    // flags
+volatile int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
+volatile unsigned int score;
 char display_draft[25][160];
-volatile int RacketPosition, PositionOfTheLastLife;
+volatile int RacketPosition, PositionOfTheLastLife, lifeCounter;
 unsigned char far* b800h;
 char display[4001], ch_arr[2048];
 Brick matrix[25][80];
-int lifeCounter;
-Position BallPosition, surprisePosition;
+Position BallPosition, surprisePosition[10];
 
 /*
 b800h[1112] = (RacketPosition / 10) + '0';
@@ -80,16 +81,16 @@ void printScore(int score)
 	}
 }
 
-void removeSurprise()
+void removeSurprise(int index)
 {
-	display_draft[surprisePosition.y][surprisePosition.x] = ' ';
-	display_draft[surprisePosition.y][surprisePosition.x + 1] = 0;
+	display_draft[surprisePosition[index].y][surprisePosition[index].x] = ' ';
+	display_draft[surprisePosition[index].y][surprisePosition[index].x + 1] = 0;
 }
 
-void drawSurprise(color surprise)
+void drawSurprise(int index, color surpriseColor)
 {
-	display_draft[surprisePosition.y][surprisePosition.x] = 1; // 'o'
-	display_draft[surprisePosition.y][surprisePosition.x + 1] = surprise; // red
+	display_draft[surprisePosition[index].y][surprisePosition[index].x] = 1; // :) - ascii
+	display_draft[surprisePosition[index].y][surprisePosition[index].x + 1] = surpriseColor;
 }
 
 void DrawBall()
@@ -155,6 +156,7 @@ void RemoveRacket(int direction) /* removing the parts of the racket and the bal
 
 void BreakTheBrick(int i, int j)
 {
+	int k = 0;
 	if (matrix[i][j / 2].enable == true)
 	{
 		if (matrix[i][j / 2].hits > 1)
@@ -170,16 +172,16 @@ void BreakTheBrick(int i, int j)
 			if (matrix[i][j].surprise != Black)
 			{
 				matrix[i][j].surprise = Black;
-				while (i++ < 24)
+				while (surprisePosition[k].x != i || surprisePosition[k].y != j)
+					k++;
+				surpriseIsDropped[k] = 1;
+				/*if (display_draft[i][j] == ' ')
 				{
-					if (display_draft[i][j] == ' ')
-					{
-						display_draft[i][j] = ' ';
-						display_draft[i][j + 1] = 0;
-						display_draft[i + 1][j] = 1;
-						display_draft[i + 1][j + 1] = Green;
-					}
-				}
+					display_draft[i][j] = ' ';
+					display_draft[i][j + 1] = 0;
+					display_draft[i + 1][j] = 1;
+					display_draft[i + 1][j + 1] = Green;
+				}*/
 			}
 		}
 	}
@@ -342,8 +344,6 @@ void displayer(void)
 	while (1)
 	{
 		receive();
-		// sleept(18);
-		// printf(display);
 		for (i = 0; i < 4000; i += 2)
 		{
 			b800h[i] = display[i];
@@ -357,6 +357,13 @@ void displayer(void)
 			moveBallDownRight();
 		else if (MoveLeftDown)
 			moveBallDownLeft();
+		for (i = 0; i < 10; i++)
+			if (surpriseIsDropped[i] && surprisePosition[i].y < 25)
+			{
+				removeSurprise(i);
+				surprisePosition[i].y++;
+				drawSurprise(i, Green);
+			}
 		b800h[1090] = (BallPosition.x / 10) + '0';
 		b800h[1090 + 1] = 32;
 		b800h[1090 + 2] = BallPosition.x % 10 + '0';
@@ -375,7 +382,6 @@ void updater()
 	while (1)
 	{
 		receive();
-
 		while (front != -1)
 		{
 			ch = ch_arr[front];
@@ -474,7 +480,6 @@ void frameDraw(int lvlDrawerPID) //draw the frame for the game
 	send(lvlDrawerPID, 1); //send msg to lvl1drawder
 }
 
-
 void updateBrickMatrix(int i, int j, bool state, int hits, int score)
 {
 	matrix[i][j].enable = state;
@@ -486,8 +491,9 @@ void updateBrickMatrix(int i, int j, bool state, int hits, int score)
 void updateSurprises(int i, int j, color color)
 {
 	matrix[i][j].surprise = color;
+	surprisePosition[0].x = i;
+	surprisePosition[0].y = j;
 }
-
 
 void lvlDrawer()  //draw the first level
 {
@@ -564,6 +570,7 @@ SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
 
 void InitializeGlobalVariables()
 {
+	int i;
 	asm{
 		PUSH AX
 		PUSH DX
