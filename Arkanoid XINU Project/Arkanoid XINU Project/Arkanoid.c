@@ -450,14 +450,14 @@ void displayer(void)
 		sprintf(str, "%d", tod);
 		for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
 		{
-			display_draft[8][i] = str[j];
-			display_draft[8][i + 1] = White;
+			display_draft[9][i] = str[j];
+			display_draft[9][i + 1] = White;
 		}
 		sprintf(str, "%d", count0x70);
 		for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
 		{
-			display_draft[9][i] = str[j];
-			display_draft[9][i + 1] = White;
+			display_draft[10][i] = str[j];
+			display_draft[10][i + 1] = White;
 		}
 		b800h[1090] = (BallPosition.x / 10) + '0';
 		b800h[1090 + 1] = 32;
