@@ -3,6 +3,9 @@
 #include <io.h>
 #include <bios.h>
 #include <string.h>
+#include <proc.h>
+#include <sleep.h>
+
 
 
 #define SizeOfRacket 10
@@ -55,10 +58,12 @@ int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear =
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
 volatile int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
 volatile unsigned int score;
+volatile INTPROC  new_int9(int mdevno);
+volatile int mapinit(int vec, int(*newisr)(), int mdevno), count0x70;
 char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter;
 unsigned char far* b800h;
-char display[4001], ch_arr[2048];
+char display[4001], ch_arr[2048], old_0A1h_mask, x71h1, x71h2, x71h3, old_70h_A_mask;
 Brick matrix[25][80];
 Position BallPosition, surprisePosition[10];
 
@@ -177,10 +182,10 @@ void BreakTheBrick(int i, int j)
 				surpriseIsDropped[k] = 1;
 				/*if (display_draft[i][j] == ' ')
 				{
-					display_draft[i][j] = ' ';
-					display_draft[i][j + 1] = 0;
-					display_draft[i + 1][j] = 1;
-					display_draft[i + 1][j + 1] = Green;
+				display_draft[i][j] = ' ';
+				display_draft[i][j + 1] = 0;
+				display_draft[i + 1][j] = 1;
+				display_draft[i + 1][j + 1] = Green;
 				}*/
 			}
 		}
@@ -279,6 +284,25 @@ void moveBallUpLeft()
 	}
 }
 
+void ballUpdater()
+{
+	while (1)
+	{
+		if (tod % 5 == 0)
+		{
+			receive();
+			if (MoveRightUp)
+				moveBallUpRight();
+			else if (MoveLeftUp)
+				moveBallUpLeft();
+			else if (MoveRightDown)
+				moveBallDownRight();
+			else if (MoveLeftDown)
+				moveBallDownLeft();
+		}
+	}
+}
+
 INTPROC new_int9(int mdevno)
 {
 	char result = 0;
@@ -312,6 +336,70 @@ INTPROC new_int9(int mdevno)
 Skip1:
 } // new_int9
 
+INTPROC new_int70(int mdevno)
+{
+	asm{
+		CLI
+		PUSH AX
+		IN AL,0A1h
+		MOV old_0A1h_mask,AL
+		AND AL,0FEh
+		OUT 0A1h,AL
+		IN AL,70h
+		//A
+		MOV AL,0Ah
+		OUT 70h,AL
+		MOV AL,8Ah
+		OUT 70h,AL
+		IN AL,71h
+		MOV BYTE PTR x71h1,AL
+		MOV old_70h_A_mask,AL
+		AND AL,10000000b
+		OR AL,16 / 2 //ints per sec
+		OUT 71h,AL
+		IN AL,71h
+		IN AL,70h
+		//B
+		MOV AL,0Bh
+		OUT 70h,AL
+		MOV AL,8Bh
+		OUT 70h,AL
+		IN AL,71h
+		MOV BYTE PTR x71h2,AL
+		OR AL,40h
+		OUT 71h,AL
+		IN AL,71h
+
+		MOV byte ptr x71h3,AL
+		IN AL, 021h
+		AND AL, 0FBh
+		OUT 021h, AL
+		IN AL, 70h
+		//C
+		MOV AL, 0Ch
+		OUT 70h, AL
+		IN AL, 70h
+		MOV AL, 8Ch
+		OUT 70h, AL
+		IN AL, 71h
+		IN AL, 70h
+		//D 
+		MOV AL, 0Dh
+		OUT 70h, AL
+		IN AL, 70h
+		MOV AL, 8Dh
+		OUT 70h, AL
+		IN AL, 71h
+
+		STI
+		POP AX
+
+	} // asm
+
+
+	count0x70++;
+}/* end 70H */
+
 void set_new_int9_newisr()
 {
 	int i;
@@ -340,7 +428,8 @@ void receiver()
 
 void displayer(void)
 {
-	int i;
+	int i, j;
+	char str[7];
 	while (1)
 	{
 		receive();
@@ -349,14 +438,7 @@ void displayer(void)
 			b800h[i] = display[i];
 			b800h[i + 1] = display[i + 1];
 		}
-		if (MoveRightUp)
-			moveBallUpRight();
-		else if (MoveLeftUp)
-			moveBallUpLeft();
-		else if (MoveRightDown)
-			moveBallDownRight();
-		else if (MoveLeftDown)
-			moveBallDownLeft();
+
 		for (i = 0; i < 10; i++)
 			if (surpriseIsDropped[i] && surprisePosition[i].y < 25)
 			{
@@ -364,6 +446,19 @@ void displayer(void)
 				surprisePosition[i].y++;
 				drawSurprise(i, Green);
 			}
+
+		sprintf(str, "%d", tod);
+		for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
+		{
+			display_draft[8][i] = str[j];
+			display_draft[8][i + 1] = White;
+		}
+		sprintf(str, "%d", count0x70);
+		for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
+		{
+			display_draft[9][i] = str[j];
+			display_draft[9][i + 1] = White;
+		}
 		b800h[1090] = (BallPosition.x / 10) + '0';
 		b800h[1090 + 1] = 32;
 		b800h[1090 + 2] = BallPosition.x % 10 + '0';
@@ -533,7 +628,7 @@ void lvlDrawer()  //draw the first level
 					{
 						display_draft[i][j + 1] = Green;
 						updateBrickMatrix(i, j / 2, true, 1, 80);
-						updateSurprises(i, j / 2, Green);
+						//updateSurprises(i, j / 2, Green);
 					}
 					//	space = 1;
 				}
@@ -591,7 +686,6 @@ void InitializeGlobalVariables()
 	lifeCounter = 3;
 }
 
-
 void initBrick()
 {
 	int i, j;
@@ -609,17 +703,20 @@ void initBrick()
 void xmain()
 {
 	int lvl1matrix[25][80] = { 0 };
-	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID;
+	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID, ballPID;
+	count0x70 = 0;
 	InitializeGlobalVariables();
 	initBrick();
+	mapinit(112, new_int70, 122);
 	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
 	resume(frameDrawPID = create(frameDraw, INITSTK, INITPRIO + 4, "FrameDraw", 1, lvlDrawerPID));
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
+	resume(ballPID = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
-	schedule(3, 1, dispid, 0, uppid, 0, frameDrawPID, 0);
+	schedule(4, 1, dispid, 0, uppid, 0, frameDrawPID, 0, ballPID, 0);
 	//sleep(10);
 	/*
 	asm {
