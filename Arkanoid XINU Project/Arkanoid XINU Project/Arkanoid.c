@@ -56,19 +56,138 @@ extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-volatile int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
-volatile unsigned int score;
+volatile int ballSpeed, perSpeed, BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
+volatile unsigned int score, mytod;
 volatile INTPROC  new_int9(int mdevno);
-volatile int mapinit(int vec, int(*newisr)(), int mdevno), count0x70;
 char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
 volatile int hertz, hertzArr[4] = { 1000, 1200, 1100, 1000 };
-char display[4001], ch_arr[2048], old_0A1h_mask, x71h1, x71h2, x71h3, old_70h_A_mask;
+char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 int changeLevelFlag;
 Brick matrix[25][80];
 Position BallPosition, surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
+
+void interrupt myTimerISR(void)
+{
+	char ui_flag, pi_flag, temp;
+	asm{
+		CLI
+		PUSH AX
+
+		// read c register
+		MOV AL, 0CH		// ask for register c
+		OUT 70H, AL
+		MOV AL, 8CH
+		OUT 70H, AL
+		IN 	AL, 71H
+
+		MOV AH, AL
+		AND AL, 00010000B
+		AND AH, 01000000B
+		MOV ui_flag, AL
+		MOV pi_flag, AH
+
+		POP AX
+	}
+
+		if (pi_flag != 0)
+		{
+			++mytod;
+		}
+	asm{
+		PUSH AX
+		// SEND EOI
+		MOV AL, 20H
+		OUT 0A0H, AL
+		OUT 020H, AL
+		POP AX
+		STI
+	}
+}
+
+void setInt70h()
+{
+	char temp;
+	setvect(0x70, myTimerISR);
+
+	temp = 1024;
+
+	asm{
+		CLI
+		PUSH AX
+
+		// BACKUP 0A1H MASK
+		IN 	AL, 0A1H
+		MOV old_0A1h_mask, AL
+
+		// BACKUP 021H MASK
+		IN 	AL,021H
+		MOV old_021h_mask, AL
+
+		// SEND NEW MASK TO 0A1H
+		AND AL, 0FEH
+		OUT 0A1H, AL
+
+		// SEND NEW MASK TO 021H
+		AND AL,0FBH
+		OUT 021H,AL
+
+		// SET NEW BASE AND RATE (STATUS REGISTER A)
+		//-----------------------------------------------------------------
+		MOV AL, 0AH			// ASK FOR STATUS REGISTER A
+		OUT 70H, AL
+		MOV AL, 8AH			// RESEND REQUEST WITH MSB=1 (SIGNAL WRITE)
+		OUT 70H, AL
+		IN 	AL, 71H			// READ REGISTER A FROM PORT 71
+		AND AL, 10000000B	// KEEP UIP
+							//OR 	AL, 00010011B
+		OR 	AL, temp
+		OUT 71H, AL			// SEND NEW A REGISTER
+		IN 	AL, 71H			// CONFIRM WRITE BY READ
+							//-----------------------------------------------------------------
+
+							// ACTIVATE PERIODIC INTERRUPT (STATUS REGISTER B)
+							//-----------------------------------------------------------------
+		MOV AL, 0BH			// ASK FOR STATUS REGISTER B
+		OUT 70H, AL
+		MOV AL, 8BH 		// RESEND REQUEST WITH MSB=1 (SIGNAL WRITE)
+		OUT 70H, AL
+		IN 	AL, 71H			// READ REGISTER B FROM PORT 71
+		AND AL, 10001111B
+		OR 	AL, 01010000B 	// SET PI AND UI FLAG
+		OUT	71H, AL			// SEND NEW B REGISTER
+		IN 	AL, 71H 		// CONFIRM WRITE BY READ
+							//-----------------------------------------------------------------
+
+							// AFTER WRITE TO A & B MUST READ C TWICE AND D ONCE
+							//-----------------------------------------------------------------
+							// READ C (FIRST)
+		MOV AL, 0CH		// ASK FOR REGISTER C
+		OUT 70H, AL
+		MOV AL, 8CH		// RESEND REQUEST WITH MSB=1 (SIGNAL WRITE)
+		OUT 70H, AL
+		IN 	AL, 71H
+
+		// READ C (SECOND)
+		MOV AL, 0CH		// ASK FOR REGISTER C
+		OUT 70H, AL
+		MOV AL, 8CH		// RESEND REQUEST WITH MSB=1 (SIGNAL WRITE)
+		OUT 70H, AL
+		IN 	AL, 71H
+
+		// READ D
+		MOV AL, 0DH		// ASK FOR REGISTER C
+		OUT 70H, AL
+		MOV AL, 8DH		// RESEND REQUEST WITH MSB=1 (SIGNAL WRITE)
+		OUT 70H, AL
+		IN 	AL, 71H
+		//-----------------------------------------------------------------
+		POP AX
+		STI
+	}
+}
 
 void ChangeSpeaker(int status)
 {
@@ -284,6 +403,21 @@ void BreakTheBrick(int i, int j)
 	}
 }
 
+void dropSur()
+{
+	int i;
+	while (1) {
+		for (i = 0; i < 10; i++)
+			if (surpriseIsDropped[i] && surprisePosition[i].y < 25)
+			{
+				receive();
+				removeSurprise(i);
+				surprisePosition[i].y++;
+				drawSurprise(i, surpriseColor[i]);
+			}
+	}
+}
+
 void moveBallDownLeft()
 {
 	if (MoveLeftDown == 1 && display_draft[BallPosition.y + 1][BallPosition.x - 1] == 0 && BallPosition.y < 24)
@@ -382,18 +516,15 @@ void ballUpdater()
 {
 	while (1)
 	{
-		if (tod % 3 == 0)
-		{
-			receive();
-			if (MoveRightUp)
-				moveBallUpRight();
-			else if (MoveLeftUp)
-				moveBallUpLeft();
-			else if (MoveRightDown)
-				moveBallDownRight();
-			else if (MoveLeftDown)
-				moveBallDownLeft();
-		}
+		receive();
+		if (MoveRightUp)
+			moveBallUpRight();
+		else if (MoveLeftUp)
+			moveBallUpLeft();
+		else if (MoveRightDown)
+			moveBallDownRight();
+		else if (MoveLeftDown)
+			moveBallDownLeft();
 	}
 }
 
@@ -434,70 +565,6 @@ INTPROC new_int9(int mdevno)
 Skip1:
 } // new_int9
 
-INTPROC new_int70(int mdevno)
-{
-	asm{
-		CLI
-		PUSH AX
-		IN AL,0A1h
-		MOV old_0A1h_mask,AL
-		AND AL,0FEh
-		OUT 0A1h,AL
-		IN AL,70h
-		//A
-		MOV AL,0Ah
-		OUT 70h,AL
-		MOV AL,8Ah
-		OUT 70h,AL
-		IN AL,71h
-		MOV BYTE PTR x71h1,AL
-		MOV old_70h_A_mask,AL
-		AND AL,10000000b
-		OR AL,16 / 2 //ints per sec
-		OUT 71h,AL
-		IN AL,71h
-		IN AL,70h
-		//B
-		MOV AL,0Bh
-		OUT 70h,AL
-		MOV AL,8Bh
-		OUT 70h,AL
-		IN AL,71h
-		MOV BYTE PTR x71h2,AL
-		OR AL,40h
-		OUT 71h,AL
-		IN AL,71h
-
-		MOV byte ptr x71h3,AL
-		IN AL, 021h
-		AND AL, 0FBh
-		OUT 021h, AL
-		IN AL, 70h
-		//C
-		MOV AL, 0Ch
-		OUT 70h, AL
-		IN AL, 70h
-		MOV AL, 8Ch
-		OUT 70h, AL
-		IN AL, 71h
-		IN AL, 70h
-		//D 
-		MOV AL, 0Dh
-		OUT 70h, AL
-		IN AL, 70h
-		MOV AL, 8Dh
-		OUT 70h, AL
-		IN AL, 71h
-
-		STI
-		POP AX
-
-	} // asm
-
-
-	count0x70++;
-}/* end 70H */
-
 void set_new_int9_newisr()
 {
 	int i;
@@ -537,34 +604,26 @@ void displayer(void)
 			b800h[i + 1] = display[i + 1];
 		}
 
-		for (i = 0; i < 10; i++)
-			if (surpriseIsDropped[i] && surprisePosition[i].y < 25)
-			{
-				removeSurprise(i);
-				surprisePosition[i].y++;
-				drawSurprise(i, surpriseColor[i]);
-			}
-
-		/*sprintf(str, "%d", tod);
+		sprintf(str, "%d", tod);
 		for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
 		{
-		display_draft[9][i] = str[j];
-		display_draft[9][i + 1] = White;
+			display_draft[9][i] = str[j];
+			display_draft[9][i + 1] = White;
 		}
-		sprintf(str, "%d", count0x70);
+		sprintf(str, "%d", mytod);
 		for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
 		{
-		display_draft[10][i] = str[j];
-		display_draft[10][i + 1] = White;
-		}*/
+			display_draft[10][i] = str[j];
+			display_draft[10][i + 1] = White;
+		}
 		b800h[1090] = (BallPosition.x / 10) + '0';
-		b800h[1090 + 1] = 32;
+		b800h[1090 + 1] = Green;
 		b800h[1090 + 2] = BallPosition.x % 10 + '0';
-		b800h[1090 + 3] = 32;
+		b800h[1090 + 3] = Green;
 		b800h[1250] = (BallPosition.y / 10) + '0';
-		b800h[1250 + 1] = 32;
+		b800h[1250 + 1] = Green;
 		b800h[1250 + 2] = BallPosition.y % 10 + '0';
-		b800h[1250 + 3] = 32;
+		b800h[1250 + 3] = Green;
 	} // while
 } // prntr
 
@@ -931,6 +990,21 @@ void InitializeGlobalVariables()
 	surprisesIndex = 0;
 	hertz = 1060;
 	changeLevelFlag = 1;
+	ballSpeed = 15;
+	perSpeed = 30;
+	asm{
+		PUSH AX
+		PUSH BX
+		MOV AL, 36H
+		OUT 43H, AL
+		MOV BX, 10846 //CHANGE COUNT
+		MOV AL, BL //TRANSFER THE LSB 1ST
+		OUT 40H, AL
+		MOV AL, BH //TRANSFER MSB SECOND
+		OUT 40H, AL
+		POP BX
+		POP AX
+	}
 }
 
 void initBrick()
@@ -949,12 +1023,10 @@ void initBrick()
 
 void xmain()
 {
-	int lvl1matrix[25][80] = { 0 };
-	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID, ballPID;
-	count0x70 = 0;
+	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID, ballPID, dropSurPID;
 	InitializeGlobalVariables();
 	initBrick();
-	mapinit(112, new_int70, 122);
+	setInt70h();
 	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
 	resume(lvl2DrawerPID = create(lvl2Drawer, INITSTK, INITPRIO, "lvl2Drawer", 0));
 	resume(frameDrawPID = create(frameDraw, INITSTK, INITPRIO + 4, "FrameDraw", 1, lvlDrawerPID));
@@ -962,15 +1034,8 @@ void xmain()
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
 	resume(ballPID = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 0));
+	resume(dropSurPID = create(dropSur, INITSTK, INITPRIO, "dropSur", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
-	schedule(4, 1, dispid, 0, uppid, 0, frameDrawPID, 0, ballPID, 0);
-	//sleep(10);
-	/*
-	asm {
-	PUSH AX
-	MOV AX, 2
-	INT 10h
-	POP AX
-	}*/
+	schedule(5, 2, dispid, 0, uppid, 1, frameDrawPID, 1, ballPID, 1, dropSurPID, 1);
 } // xmain

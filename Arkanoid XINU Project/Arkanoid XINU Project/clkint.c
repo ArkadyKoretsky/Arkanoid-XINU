@@ -8,7 +8,7 @@
 
 extern int sched_arr_pid[];
 extern int sched_arr_int[];
-
+extern unsigned int mytod, ballSpeed, perSpeed;
 extern int gcycle_length;
 extern int point_in_cycle;
 extern int gno_of_pids;
@@ -21,8 +21,8 @@ int	msg;
 	int	ps;
 
 	disable(ps);
-	if (isbadpid(pid) || ( (pptr = &proctab[pid])->pstate == PRFREE)
-	   || pptr->phasmsg != 0) {
+	if (isbadpid(pid) || ((pptr = &proctab[pid])->pstate == PRFREE)
+		|| pptr->phasmsg != 0) {
 		restore(ps);
 		return(SYSERR);
 	}
@@ -37,46 +37,63 @@ int	msg;
 
 
 
-/*------------------------------------------------------------------------
- *  clkint  --  clock service routine
- *  called at every clock tick and when starting the deferred clock
- *------------------------------------------------------------------------
- */
+  /*------------------------------------------------------------------------
+  *  clkint  --  clock service routine
+  *  called at every clock tick and when starting the deferred clock
+  *------------------------------------------------------------------------
+  */
 INTPROC clkint(mdevno)
 int mdevno;				/* minor device number		*/
 {
 	int	i;
-        int resched_flag;
+	int resched_flag;
 
-        
+
 	tod++;
 
-        resched_flag = 0;
+	resched_flag = 0;
 	if (slnempty)
-		if ( (--*sltop) <= 0 )
-                     {
-                        resched_flag = 1;
+		if ((--*sltop) <= 0)
+		{
+			resched_flag = 1;
 			wakeup();
-                     } /* if */
+		} /* if */
 
-	if ( (--preempt) <= 0 )
-             resched_flag = 1;
+	if ((--preempt) <= 0)
+		resched_flag = 1;
 
-       point_in_cycle++;
-       if (point_in_cycle == gcycle_length)
-         point_in_cycle = 0;
+	point_in_cycle++;
+	if (point_in_cycle == gcycle_length)
+		point_in_cycle = 0;
 
-       for(i=0; i < gno_of_pids; i++) 
-       {
-          if(point_in_cycle == sched_arr_int[i])
-            {
-             noresched_send(sched_arr_pid[i], 11);
-             resched_flag = 1;
-            } // if
-       } // for
+	for (i = 0; i < gno_of_pids; i++)
+	{
+		if (point_in_cycle == sched_arr_int[i] && i != 3 && i != 4)
+		{
+			noresched_send(sched_arr_pid[i], 11);
+			resched_flag = 1;
+		} // if
+		else if (i == 3)
+		{
+			if (tod % ballSpeed == 0)
+			{
+				noresched_send(sched_arr_pid[i], 11);
+				resched_flag = 1;
+			}
+		}
+		else if (i == 4)
+		{
+			if (tod % 30 == 0)
+			{
+				noresched_send(sched_arr_pid[i], 11);
+				resched_flag = 1;
+			}
+		}
 
-       if (resched_flag == 1)
- 		resched();
+	} // for
+
+	if (resched_flag == 1)
+		resched();
 
 } // clkint
 
