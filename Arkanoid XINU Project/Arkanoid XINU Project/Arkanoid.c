@@ -9,6 +9,8 @@
 #define SizeOfRacket 10
 #define Right 8
 #define Left 0
+#define ON (1)
+#define OFF (0)
 
 /*
 * Gray = 1 / 50p
@@ -61,10 +63,85 @@ volatile int mapinit(int vec, int(*newisr)(), int mdevno), count0x70;
 char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
+volatile int hertz = 1060;
 char display[4001], ch_arr[2048], old_0A1h_mask, x71h1, x71h2, x71h3, old_70h_A_mask;
 Brick matrix[25][80];
 Position BallPosition, surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
+
+void ChangeSpeaker(int status)
+{
+	int portval;
+	//   portval = inportb( 0x61 );
+
+	portval = 0;
+	asm{
+		PUSH AX
+		MOV AL,61h
+		MOV BYTE PTR portval,AL
+		POP AX
+	}
+
+		if (status == ON)
+			portval |= 0x03;
+		else
+			portval &= ~0x03;
+	// outportb( 0x61, portval );
+	asm{
+		PUSH AX
+		MOV AX,portval
+		OUT 61h,AL
+		POP AX
+	} // asm
+
+} /*--ChangeSpeaker( )----------*/
+
+void NoSound(void)
+{
+	ChangeSpeaker(OFF);
+} /*--NoSound( )------*/
+
+void Sound()
+{
+	unsigned divisor;
+	asm{
+		PUSH AX
+	}
+	divisor = 1193180L / hertz;
+	//printf ("divisor is %d\n", divisor);
+	ChangeSpeaker(ON);
+
+	//        outportb( 0x43, 0xB6 );
+	asm{
+		PUSH AX
+		MOV AL,0B6h
+		OUT 43h,AL
+		POP AX
+	} // asm
+
+	  //       outportb( 0x42, divisor & 0xFF ) ;
+		asm{
+		PUSH AX
+		MOV AX,divisor
+		AND AX,0FFh
+		OUT 42h,AL
+		POP AX
+	} // asm
+
+	  //        outportb( 0x42, divisor >> 8 ) ;
+
+		asm{
+		PUSH AX
+		MOV AX,divisor
+		MOV AL,AH
+		OUT 42h,AL
+		POP AX
+	}
+		asm{
+		POP AX
+	}
+		//NoSound ();
+} /*--Sound( )-----*/
 
 void printScore(int score)
 {
@@ -112,7 +189,7 @@ void DeleteLife()
 {
 	char* gameOverStr = "Game Over";
 	int i, j;
-	lifeCounter--;
+	//lifeCounter--;
 	if (lifeCounter > 0)
 	{
 		display_draft[5][PositionOfTheLastLife] = ' ';
@@ -157,11 +234,24 @@ void RemoveRacket(int direction) /* removing the parts of the racket and the bal
 		RemoveBall();
 }
 
+void BlueSurprise()
+{
+	int i;
+	for (i = 0; i < SizeOfRacket * 2; i += 2)
+	{
+		display_draft[24][RacketPosition + i] = 220;
+		display_draft[24][RacketPosition + i + 1] = 112;
+	}
+	if (BallOnRacket)
+		DrawBall();
+}
+
 void BreakTheBrick(int i, int j)
 {
 	int k = 0;
 	if (matrix[i][j / 2].enable == true)
 	{
+		Sound();
 		if (matrix[i][j / 2].hits > 1)
 		{
 			matrix[i][j / 2].hits--;
@@ -191,6 +281,7 @@ void moveBallDownLeft()
 		BallPosition.y++;
 		BallPosition.x -= 2;
 		DrawBall();
+		NoSound();
 	}
 	else
 	{
@@ -215,6 +306,7 @@ void moveBallDownRight()
 		BallPosition.y++;
 		BallPosition.x += 2;
 		DrawBall();
+		NoSound();
 	}
 	else
 	{
@@ -603,7 +695,7 @@ void lvlDrawer()  //draw the first level
 					{
 						display_draft[i][j + 1] = Red;
 						updateBrickMatrix(i, j / 2, true, 2, 90);
-						switch (j % 29)
+						/*switch (j % 29)
 						{
 						case 1:
 							updateSurprises(i, j / 2, Green);
@@ -614,13 +706,13 @@ void lvlDrawer()  //draw the first level
 						case 21:
 							updateSurprises(i, j / 2, Blue);
 							break;
-						}
+						}*/
 					}
 					else if (i == 5)
 					{
 						display_draft[i][j + 1] = Yellow;
 						updateBrickMatrix(i, j / 2, true, 1, 120);
-						switch (j % 29)
+						/*switch (j % 29)
 						{
 						case 1:
 							updateSurprises(i, j / 2, Blue);
@@ -631,29 +723,47 @@ void lvlDrawer()  //draw the first level
 						case 21:
 							updateSurprises(i, j / 2, Orange);
 							break;
-						}
+						}*/
 					}
 					else if (i == 6)
 					{
 						display_draft[i][j + 1] = Blue;
 						updateBrickMatrix(i, j / 2, true, 2, 70);
-						switch (j % 29)
-						{
-						case 1:
-							updateSurprises(i, j / 2, Orange);
-							break;
-						case 11:
-							updateSurprises(i, j / 2, Blue);
-							break;
-						case 21:
-							updateSurprises(i, j / 2, Green);
-							break;
-						}
 					}
 					else if (i == 7)
 					{
 						display_draft[i][j + 1] = Green;
 						updateBrickMatrix(i, j / 2, true, 1, 80);
+						switch (j % 29)
+						{
+						case 11:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 15:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 18:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 19:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 20:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 21:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 22:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 23:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 24:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						}
 					}
 				}
 			}
