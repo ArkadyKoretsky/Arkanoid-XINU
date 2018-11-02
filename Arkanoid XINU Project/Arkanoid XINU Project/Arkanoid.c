@@ -29,7 +29,7 @@ typedef enum color
 {
 	Gray = 7,
 	White = 15,
-	Orange = 13,
+	Orange = 6,
 	Blue = 1,
 	Green = 2,
 	Red = 4,
@@ -54,7 +54,7 @@ typedef struct brick
 
 extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
-int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1; // existing varibles
+int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
 volatile int BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
 volatile unsigned int score;
@@ -65,6 +65,7 @@ volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
 volatile int hertz = 1060;
 char display[4001], ch_arr[2048], old_0A1h_mask, x71h1, x71h2, x71h3, old_70h_A_mask;
+int changeLevelFlag;
 Brick matrix[25][80];
 Position BallPosition, surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
@@ -143,15 +144,25 @@ void Sound()
 		//NoSound ();
 } /*--Sound( )-----*/
 
+
 void printScore(int score)
 {
 	int i, j;
-	char str[7];
+	char str[7], nextLevelStr[30] = "Press F1 to next level";
 	sprintf(str, "%d", score);
 	for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
 	{
 		display_draft[8][i] = str[j];
 		display_draft[8][i + 1] = White;
+	}
+	if (score >= 20 && changeLevelFlag == 1)
+	{
+		for (i = 590, j = 0; j < 22; j++, i += 2)
+		{
+			display_draft[12][i] = nextLevelStr[j];
+			display_draft[12][i + 1] = Yellow;
+		}
+		changeLevelFlag = 0;
 	}
 }
 
@@ -411,6 +422,10 @@ INTPROC new_int9(int mdevno)
 		{
 			result = 'r';
 		}
+		else if (scan == 59)
+		{
+			result = 'f';
+		}
 	if ((scan == 46) && (ascii == 3)) // Ctrl-C?
 	{
 		asm INT 27; // terminate xinu
@@ -591,6 +606,16 @@ void updater()
 					MoveRightUp = 1;
 				}
 			}
+			else if (ch == 'f')
+			{
+				send(lvl2DrawerPID, 1);
+				for (i = 590, j = 0; j < 22; j++, i += 2)
+				{
+					display_draft[12][i] = ' ';
+					display_draft[12][i + 1] = Black;
+				}
+				score = 0;
+			}
 		} // while	
 		for (i = 0; i < 25; i++)
 			for (j = 0; j < 160; j++)
@@ -672,6 +697,86 @@ void updateSurprises(int i, int j, color color)
 	surpriseColor[surprisesIndex] = color;
 	surprisePosition[surprisesIndex].x = j * 2;
 	surprisePosition[surprisesIndex++].y = i;
+}
+
+void lvl2Drawer()  //draw the second level
+{
+	int i, j, space = 0, msg = receive();
+	if (msg == 1) //receive from frameDraw
+	{
+		for (i = 0; i < 25; i++)
+		{
+			for (j = 0; j < 160; j += 2)
+			{
+				if (j > 20 && j < 80 && i > 0)
+				{
+					display_draft[i][j] = 254;
+					if (i == 3)
+					{
+						display_draft[i][j + 1] = Orange;
+						updateBrickMatrix(i, j / 2, true, 1, 60);
+					}
+					else if (i == 4)
+					{
+						display_draft[i][j + 1] = Green;
+						updateBrickMatrix(i, j / 2, true, 2, 80);
+					}
+					else if (i == 5)
+					{
+						display_draft[i][j + 1] = Yellow;
+						updateBrickMatrix(i, j / 2, true, 3, 120);
+					}
+					else if (i == 6)
+					{
+						display_draft[i][j + 1] = Gray;
+						updateBrickMatrix(i, j / 2, true, 3, 50);
+					}
+					else if (i == 7)
+					{
+						display_draft[i][j + 1] = Red;
+						updateBrickMatrix(i, j / 2, true, 2, 90);
+					}
+					else if (i == 8)
+					{
+						display_draft[i][j + 1] = Blue;
+						updateBrickMatrix(i, j / 2, true, 1, 80);
+						switch (j % 29)
+						{
+						case 11:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 15:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 18:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 19:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 20:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 21:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 22:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 23:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						case 24:
+							updateSurprises(i, j / 2, Blue);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+	DrawRacket();
+	DrawBall();
 }
 
 void lvlDrawer()  //draw the first level
@@ -813,6 +918,7 @@ void InitializeGlobalVariables()
 	PositionOfTheLastLife = 134;
 	lifeCounter = 3;
 	surprisesIndex = 0;
+	changeLevelFlag = 1;
 }
 
 void initBrick()
@@ -838,6 +944,7 @@ void xmain()
 	initBrick();
 	mapinit(112, new_int70, 122);
 	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
+	resume(lvl2DrawerPID = create(lvl2Drawer, INITSTK, INITPRIO, "lvl2Drawer", 0));
 	resume(frameDrawPID = create(frameDraw, INITSTK, INITPRIO + 4, "FrameDraw", 1, lvlDrawerPID));
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
