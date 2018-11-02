@@ -63,7 +63,7 @@ volatile int mapinit(int vec, int(*newisr)(), int mdevno), count0x70;
 char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
-volatile int hertz = 1060;
+volatile int hertz, hertzArr[4] = { 1000, 1200, 1100, 1000 };
 char display[4001], ch_arr[2048], old_0A1h_mask, x71h1, x71h2, x71h3, old_70h_A_mask;
 int changeLevelFlag;
 Brick matrix[25][80];
@@ -608,13 +608,24 @@ void updater()
 			}
 			else if (ch == 'f')
 			{
+				RemoveBall();
+				BallPosition.x = 50;
+				BallPosition.y = 23;
 				send(lvl2DrawerPID, 1);
-				for (i = 590, j = 0; j < 22; j++, i += 2)
+				for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
 				{
 					display_draft[12][i] = ' ';
 					display_draft[12][i + 1] = Black;
 				}
 				score = 0;
+				for (i = 0; i < 4; i++)  //next level sounds
+				{
+					hertz = hertzArr[i];
+					Sound();
+					sleep(1);
+				}
+				NoSound();
+				hertz = 1060;
 			}
 		} // while	
 		for (i = 0; i < 25; i++)
@@ -918,6 +929,7 @@ void InitializeGlobalVariables()
 	PositionOfTheLastLife = 134;
 	lifeCounter = 3;
 	surprisesIndex = 0;
+	hertz = 1060;
 	changeLevelFlag = 1;
 }
 
