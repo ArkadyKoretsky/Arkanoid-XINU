@@ -54,17 +54,18 @@ typedef struct brick
 
 extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
-int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID; // existing varibles
+int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID, lvl3DrawerPID; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
 volatile int ballSpeed, perSpeed, BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
 volatile unsigned int score, mytod;
 volatile INTPROC  new_int9(int mdevno);
-char display_draft[25][160];
+volatile char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
 volatile int hertz, hertzArr[4] = { 1000, 1200, 1100, 1000 };
 char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
-int changeLevelFlag;
+volatile int changeLevel1Flag, changeLevel2Flag, level;
+char scoreStr[7];
 Brick matrix[25][80];
 Position BallPosition, surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
@@ -267,21 +268,31 @@ void Sound()
 void printScore(int score)
 {
 	int i, j;
-	char str[7], nextLevelStr[30] = "Press F1 to next level";
-	sprintf(str, "%d", score);
-	for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(str); j++, i += 2)
+	char nextLevelStr[30] = "Press F1 to next level";
+	sprintf(scoreStr, "%d", score);
+	for (i = 604 + 4, j = 0; i < 604 + 16, j < strlen(scoreStr); j++, i += 2)
 	{
-		display_draft[8][i] = str[j];
+		display_draft[8][i] = scoreStr[j];
 		display_draft[8][i + 1] = White;
 	}
-	if (score >= 20 && changeLevelFlag == 1)
+	if (score >= 20 && changeLevel1Flag == 1)
 	{
 		for (i = 590, j = 0; j < 22; j++, i += 2)
 		{
 			display_draft[12][i] = nextLevelStr[j];
 			display_draft[12][i + 1] = Yellow;
 		}
-		changeLevelFlag = 0;
+		changeLevel1Flag = 0;
+		changeLevel2Flag = 1;
+	}
+	if (score >= 300 && changeLevel2Flag == 1)
+	{
+		for (i = 590, j = 0; j < 22; j++, i += 2)
+		{
+			display_draft[12][i] = nextLevelStr[j];
+			display_draft[12][i + 1] = Yellow;
+		}
+		changeLevel2Flag = 0;
 	}
 }
 
@@ -301,6 +312,7 @@ void drawSurprise(int index, color surpriseColor)
 	display_draft[surprisePosition[index].y][surprisePosition[index].x] = 1; // :) - ascii
 	if (surprisePosition[index].y > 7) // went through all the bricks
 		display_draft[surprisePosition[index].y][surprisePosition[index].x + 1] = surpriseColor;
+
 }
 
 void DrawBall()
@@ -667,24 +679,51 @@ void updater()
 			}
 			else if (ch == 'f')
 			{
-				RemoveBall();
-				BallPosition.x = 50;
-				BallPosition.y = 23;
-				send(lvl2DrawerPID, 1);
-				for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
+				if (level == 1)
 				{
-					display_draft[12][i] = ' ';
-					display_draft[12][i + 1] = Black;
+					RemoveBall();
+					//BallPosition.x = 50;
+					//BallPosition.y = 23;
+					send(lvl2DrawerPID, 1);
+					for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
+					{
+						display_draft[12][i] = ' ';
+						display_draft[12][i + 1] = Black;
+					}
+					score = 0;
+					for (i = 0; i < 4; i++)  //next level sounds
+					{
+						hertz = hertzArr[i];
+						Sound();
+						sleep(1);
+					}
+					NoSound();
+					hertz = 1060;
+					level = 2;
 				}
-				score = 0;
-				for (i = 0; i < 4; i++)  //next level sounds
+				else if (level == 2)
 				{
-					hertz = hertzArr[i];
-					Sound();
-					sleep(1);
+					RemoveBall();
+					//BallPosition.x = 50;
+					//BallPosition.y = 23;
+					send(lvl3DrawerPID, 1);
+					for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
+					{
+						display_draft[12][i] = ' ';
+						display_draft[12][i + 1] = Black;
+					}
+					score = 0;
+					for (i = 0; i < 4; i++)  //next level sounds
+					{
+						hertz = hertzArr[i];
+						Sound();
+						sleep(1);
+					}
+					NoSound();
+					hertz = 1060;
+					level = 3;
 				}
-				NoSound();
-				hertz = 1060;
+
 			}
 		} // while	
 		for (i = 0; i < 25; i++)
@@ -767,6 +806,74 @@ void updateSurprises(int i, int j, color color)
 	surpriseColor[surprisesIndex] = color;
 	surprisePosition[surprisesIndex].x = j * 2;
 	surprisePosition[surprisesIndex++].y = i;
+}
+
+void cleanScreen()
+{
+	int i, j;
+	for (i = 1; i < 25; i++)
+	{
+		for (j = 2; j < 98; j += 2)
+		{
+			display_draft[i][j] = ' ';
+			display_draft[i][j + 1] = Black;
+		}
+	}
+}
+
+void lvl3Drawer()  //draw the second level
+{
+	int i, j, space = 0, msg = receive();
+	if (msg == 1) //receive from frameDraw
+	{
+		cleanScreen();
+		for (i = 3; i < 8; i++)
+			for (j = 20; j < 80; j += 2)
+			{
+				display_draft[i][j] = 254;
+				display_draft[i][j + 1] = White;
+			}
+		///////R
+		for (i = 3, j = 38; i < 8; i++)
+		{
+			display_draft[i][j] = 254;
+			display_draft[i][j + 1] = Purple;
+		}
+		for (j = 40; j < 50; j += 2)
+		{
+			display_draft[3][j] = 254;
+			display_draft[3][j + 1] = Purple;
+		}
+		display_draft[4][48] = 254;
+		display_draft[4][49] = Purple;
+		display_draft[5][48] = 254;
+		display_draft[5][49] = Purple;
+		display_draft[5][46] = 254;
+		display_draft[5][47] = Purple;
+		display_draft[5][44] = 254;
+		display_draft[5][45] = Purple;
+		display_draft[6][46] = 254;
+		display_draft[6][47] = Purple;
+		display_draft[7][48] = 254;
+		display_draft[7][49] = Purple;
+
+
+		///////T		
+		for (j = 52; j < 66; j += 2)
+		{
+			display_draft[3][j] = 254;
+			display_draft[3][j + 1] = Purple;
+		}
+		for (i = 3, j = 58; i < 8; i++)
+		{
+			display_draft[i][j] = 254;
+			display_draft[i][j + 1] = Purple;
+		}
+
+
+	}
+	DrawRacket();
+	DrawBall();
 }
 
 void lvl2Drawer()  //draw the second level
@@ -989,7 +1096,9 @@ void InitializeGlobalVariables()
 	lifeCounter = 3;
 	surprisesIndex = 0;
 	hertz = 1060;
-	changeLevelFlag = 1;
+	changeLevel1Flag = 1;
+	changeLevel2Flag = 0;
+	level = 1;
 	ballSpeed = 15;
 	perSpeed = 30;
 	asm{
@@ -1029,6 +1138,7 @@ void xmain()
 	setInt70h();
 	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
 	resume(lvl2DrawerPID = create(lvl2Drawer, INITSTK, INITPRIO, "lvl2Drawer", 0));
+	resume(lvl3DrawerPID = create(lvl3Drawer, INITSTK, INITPRIO, "lvl3Drawer", 0));
 	resume(frameDrawPID = create(frameDraw, INITSTK, INITPRIO + 4, "FrameDraw", 1, lvlDrawerPID));
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
