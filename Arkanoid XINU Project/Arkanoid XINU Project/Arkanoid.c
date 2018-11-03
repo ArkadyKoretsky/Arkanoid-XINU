@@ -375,6 +375,21 @@ void RemoveRacket(int direction) /* removing the parts of the racket and the bal
 		RemoveBall();
 }
 
+void orangeSurprise()
+{
+	ballSpeed = ballSpeed * 2;
+	display_draft[15][600] = (ballSpeed / 10) + '0';
+	display_draft[15][600 + 1] = Yellow;
+	display_draft[15][600 + 2] = (ballSpeed % 10) + '0';
+	display_draft[15][600 + 3] = Yellow;
+	sleep(30);
+	ballSpeed = ballSpeed / 2;
+	display_draft[15][600] = (ballSpeed / 10) + '0';
+	display_draft[15][600 + 1] = Yellow;
+	display_draft[15][600 + 2] = (ballSpeed % 10) + '0';
+	display_draft[15][600 + 3] = Yellow;
+}
+
 void BlueSurprise()
 {
 	int i;
@@ -426,21 +441,42 @@ void dropSur()
 				receive();
 				removeSurprise(i);
 				surprisePosition[i].y++;
+				{
+					display_draft[13][600] = (surprisePosition[i].y / 10) + '0';
+					display_draft[13][600 + 1] = Yellow;
+					display_draft[13][600 + 2] = (surprisePosition[i].y % 10) + '0';
+					display_draft[13][600 + 3] = Yellow;
+					display_draft[14][600] = (surprisePosition[i].x / 10) + '0';
+					display_draft[14][600 + 1] = Yellow;
+					display_draft[14][600 + 2] = (surprisePosition[i].x % 10) + '0';
+					display_draft[14][600 + 3] = Yellow;
+					display_draft[13][610] = (i / 10) + '0';
+					display_draft[13][610 + 1] = Yellow;
+					display_draft[13][610 + 2] = (i % 10) + '0';
+					display_draft[13][610 + 3] = Yellow;
+					display_draft[15][610 + 2] = display_draft[surprisePosition[i].y][surprisePosition[i].x];
+					display_draft[15][610 + 3] = display_draft[surprisePosition[i].y][surprisePosition[i].x + 1];
+				}
 				if (surprisePosition[i].y < 24)
 				{
 					drawSurprise(i, surpriseColor[i]);
 				}
-				else
+				else if (surprisePosition[i].x >= RacketPosition && surprisePosition[i].x <= RacketPosition + SizeOfRacket)
 				{
-					if (surprisePosition[i].x >= RacketPosition && surprisePosition[i].x <= RacketPosition + SizeOfRacket)
+					switch (surpriseColor[i])
 					{
-						display_draft[15][50] = 1;
-						display_draft[15][50 + 1] = Purple;
+					case Blue:
+						resume(create(BlueSurprise, INITSTK, INITPRIO, "BlueSurprise", 0));
+						break;
+					case Orange:
+						resume(create(orangeSurprise, INITSTK, INITPRIO, "BlueSurprise", 0));
+						break;
 					}
 				}
 			}
 		}
 	}
+}
 }
 
 void moveBallDownLeft()
@@ -649,6 +685,10 @@ void displayer(void)
 		b800h[1250 + 1] = Green;
 		b800h[1250 + 2] = BallPosition.y % 10 + '0';
 		b800h[1250 + 3] = Green;
+		display_draft[14][610] = RacketPosition / 10 + '0';
+		display_draft[14][610 + 1] = Yellow;
+		display_draft[14][610 + 2] = RacketPosition % 10 + '0';
+		display_draft[14][610 + 3] = Yellow;
 	} // while
 } // prntr
 
