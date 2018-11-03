@@ -312,7 +312,6 @@ void drawSurprise(int index, color surpriseColor)
 	display_draft[surprisePosition[index].y][surprisePosition[index].x] = 1; // :) - ascii
 	if (surprisePosition[index].y > 7) // went through all the bricks
 		display_draft[surprisePosition[index].y][surprisePosition[index].x + 1] = surpriseColor;
-
 }
 
 void DrawBall()
@@ -418,15 +417,29 @@ void BreakTheBrick(int i, int j)
 void dropSur()
 {
 	int i;
-	while (1) {
+	while (1)
+	{
 		for (i = 0; i < 10; i++)
-			if (surpriseIsDropped[i] && surprisePosition[i].y < 25)
+		{
+			if (surpriseIsDropped[i] && surprisePosition[i].y < 24)
 			{
 				receive();
 				removeSurprise(i);
 				surprisePosition[i].y++;
-				drawSurprise(i, surpriseColor[i]);
+				if (surprisePosition[i].y < 24)
+				{
+					drawSurprise(i, surpriseColor[i]);
+				}
+				else
+				{
+					if (surprisePosition[i].x >= RacketPosition && surprisePosition[i].x <= RacketPosition + SizeOfRacket)
+					{
+						display_draft[15][50] = 1;
+						display_draft[15][50 + 1] = Purple;
+					}
+				}
 			}
+		}
 	}
 }
 
@@ -690,7 +703,6 @@ void updater()
 						display_draft[12][i] = ' ';
 						display_draft[12][i + 1] = Black;
 					}
-					score = 0;
 					for (i = 0; i < 4; i++)  //next level sounds
 					{
 						hertz = hertzArr[i];
@@ -712,7 +724,6 @@ void updater()
 						display_draft[12][i] = ' ';
 						display_draft[12][i + 1] = Black;
 					}
-					score = 0;
 					for (i = 0; i < 4; i++)  //next level sounds
 					{
 						hertz = hertzArr[i];
@@ -1095,7 +1106,7 @@ void InitializeGlobalVariables()
 	PositionOfTheLastLife = 134;
 	lifeCounter = 3;
 	surprisesIndex = 0;
-	hertz = 1060;
+	hertz = 1200;
 	changeLevel1Flag = 1;
 	changeLevel2Flag = 0;
 	level = 1;
