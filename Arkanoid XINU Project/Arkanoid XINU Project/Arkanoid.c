@@ -477,7 +477,6 @@ void dropSur()
 		}
 	}
 }
-}
 
 void moveBallDownLeft()
 {
