@@ -55,7 +55,7 @@ extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID, lvl3DrawerPID; // existing varibles
 int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-volatile int greenSurFlag, left, right, sizeOfRacket, ballSpeed, perSpeed, BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 }; // flags
+volatile int greenSurFlag, redSurFlag, left, right, sizeOfRacket, ballSpeed, perSpeed, BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 };
 volatile unsigned int score, mytod;
 volatile INTPROC  new_int9(int mdevno);
 volatile char display_draft[25][160];
@@ -66,7 +66,7 @@ char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
 char scoreStr[7];
 Brick matrix[25][80];
-Position lazerPostion, BallPosition, surprisePosition[10] = { 0 };
+Position BallPosition, surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
 
 void interrupt myTimerISR(void)
@@ -263,7 +263,6 @@ void Sound()
 		//NoSound ();
 } /*--Sound( )-----*/
 
-
 void cleanScreen()
 {
 	int i, j;
@@ -441,13 +440,20 @@ void greenSurprise()
 	greenSurFlag = 0;
 }
 
+void redSurprise()
+{
+	redSurFlag = 1;
+	sleep(60);
+	redSurFlag = 0;
+}
+
 void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for lazer
 {
 	int k = 0;
 	if (matrix[i][j / 2].enable == true)
 	{
 		Sound();
-		if (matrix[i][j / 2].hits > 1)
+		if (matrix[i][j / 2].hits >= 1)
 		{
 			if (type == 1)
 			{
@@ -458,7 +464,7 @@ void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for laze
 				matrix[i][j / 2].hits -= 2;
 			}
 		}
-		else
+		if (matrix[i][j / 2].hits <= 0)
 		{
 			score += matrix[i][j / 2].score;
 			printScore(score);
@@ -519,6 +525,9 @@ void dropSur()
 						break;
 					case Green:
 						resume(create(greenSurprise, INITSTK, INITPRIO, "greenSurprise", 0));
+					case Red:
+						resume(create(redSurprise, INITSTK, INITPRIO, "redSurprise", 0));
+						break;
 					}
 				}
 			}
@@ -526,39 +535,41 @@ void dropSur()
 	}
 }
 
-void drawLazer()
+void drawLazer(Position lazerPosition)
 {
-	display_draft[lazerPostion.y][lazerPostion.x] = 24; // arrow 
-	display_draft[lazerPostion.y][lazerPostion.x + 1] = Yellow; // 
+	display_draft[lazerPosition.y][lazerPosition.x] = 24; // arrow 
+	display_draft[lazerPosition.y][lazerPosition.x + 1] = Yellow;
 }
 
-void removeLazer()
+void removeLazer(Position lazerPosition)
 {
-	display_draft[lazerPostion.y][lazerPostion.x] = ' ';
-	display_draft[lazerPostion.y][lazerPostion.x + 1] = 0;
+	display_draft[lazerPosition.y][lazerPosition.x] = ' ';
+	display_draft[lazerPosition.y][lazerPosition.x + 1] = 0;
 }
 
 void lazer()
 {
+	Position lazerPosition;
+	lazerPosition.y = 23;
 	if (sizeOfRacket == 10)
 	{
-		lazerPostion.x = RacketPosition + (sizeOfRacket / 2) - 1;
+		lazerPosition.x = RacketPosition + (sizeOfRacket / 2) - 1;
 	}
 	else
 	{
-		lazerPostion.x = RacketPosition + (sizeOfRacket / 2);
+		lazerPosition.x = RacketPosition + (sizeOfRacket / 2);
 	}
-	while (display_draft[lazerPostion.y - 1][lazerPostion.x + 1] == 0 && lazerPostion.y - 1 > 0)
+	while (display_draft[lazerPosition.y - 1][lazerPosition.x + 1] == 0 && lazerPosition.y - 1 > 0)
 	{
-		lazerPostion.y--;
-		drawLazer();
-		removeLazer();
+		lazerPosition.y--;
+		drawLazer(lazerPosition);
+		sleep(1);
+		removeLazer(lazerPosition);
 	}
-	if (lazerPostion.y > 0)
+	if (lazerPosition.y > 0)
 	{
-		BreakTheBrick(lazerPostion.y - 1, lazerPostion.x, 1);
-		removeLazer();
-		kill(getpid());
+		BreakTheBrick(lazerPosition.y - 1, lazerPosition.x, 1);
+		removeLazer(lazerPosition);
 	}
 }
 
@@ -834,8 +845,6 @@ void updater()
 				if (level == 1)
 				{
 					RemoveBall();
-					//BallPosition.x = 50;
-					//BallPosition.y = 23;
 					send(lvl2DrawerPID, 1);
 					for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
 					{
@@ -855,8 +864,6 @@ void updater()
 				else if (level == 2)
 				{
 					RemoveBall();
-					//BallPosition.x = 50;
-					//BallPosition.y = 23;
 					send(lvl3DrawerPID, 1);
 					for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
 					{
@@ -874,14 +881,15 @@ void updater()
 					level = 3;
 				}
 			}
-			if (ch == ' ')
+			else if (ch == ' ')
 			{
 				if (BallOnRacket)
 				{
 					BallOnRacket = 0;
 					MoveRightUp = 1;
 				}
-				resume(create(lazer, INITSTK, INITPRIO, "UPDATER", 0));
+				if (redSurFlag)
+					resume(create(lazer, INITSTK, INITPRIO, "Lazer", 0));
 			}
 		} // while	
 		for (i = 0; i < 25; i++)
@@ -953,7 +961,7 @@ void frameDraw(int lvlDrawerPID) //draw the frame for the game
 void updateBrickMatrix(int i, int j, bool state, int hits, int score)
 {
 	matrix[i][j].enable = state;
-	matrix[i][j].hits = hits;
+	matrix[i][j].hits = hits * 2;
 	matrix[i][j].score = score;
 	matrix[i][j].surprise = Black;
 }
@@ -1164,31 +1172,31 @@ void lvlDrawer()  //draw the first level
 						switch (j % 29)
 						{
 						case 11:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 15:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 18:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 19:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 20:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 21:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 22:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 23:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						case 24:
-							updateSurprises(i, j / 2, Green);
+							updateSurprises(i, j / 2, Red);
 							break;
 						}
 					}
@@ -1232,15 +1240,7 @@ void InitializeGlobalVariables()
 	}
 	score = 0;
 	BallPosition.x = 50; // 3730
-	lazerPostion.y = BallPosition.y = 23;
-	if (sizeOfRacket == 10)
-	{
-		lazerPostion.x = RacketPosition + (sizeOfRacket / 2) - 1;
-	}
-	else
-	{
-		lazerPostion.x = RacketPosition + (sizeOfRacket / 2);
-	}
+	BallPosition.y = 23;
 	RacketPosition = 46; // 3886
 	b800h = (unsigned char far*)0xB8000000;
 	BallOnRacket = 1;
@@ -1251,8 +1251,8 @@ void InitializeGlobalVariables()
 	right = 8;
 	left = 0;
 	surprisesIndex = 0;
-	greenSurFlag = 0;
-	hertz = 1200;
+	redSurFlag = greenSurFlag = 0;
+	hertz = 500;
 	changeLevel1Flag = 1;
 	changeLevel2Flag = 0;
 	level = 1;
