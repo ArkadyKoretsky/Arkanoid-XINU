@@ -65,7 +65,7 @@ char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
 char scoreStr[7];
 Brick matrix[25][80];
-Position BallPosition, surprisePosition[10] = { 0 };
+Position lazerPostion, BallPosition, surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
 
 void interrupt myTimerISR(void)
@@ -262,7 +262,6 @@ void Sound()
 		//NoSound ();
 } /*--Sound( )-----*/
 
-
 void printScore(int score)
 {
 	int i, j;
@@ -420,6 +419,13 @@ void BlueSurprise()
 	DrawRacket();
 }
 
+void greenSurprise()
+{
+	greenSurFlag = 1;
+	sleep(60);
+	greenSurFlag = 0;
+}
+
 void BreakTheBrick(int i, int j)
 {
 	int k = 0;
@@ -489,10 +495,34 @@ void dropSur()
 					case Orange:
 						resume(create(orangeSurprise, INITSTK, INITPRIO, "orangeSurprise", 0));
 						break;
+					case Green:
+						resume(create(greenSurprise, INITSTK, INITPRIO, "greenSurprise", 0));
 					}
 				}
 			}
 		}
+	}
+}
+
+void drawLazer()
+{
+	display_draft[lazerPostion.y][lazerPostion.x] = 24; // arrow 
+	display_draft[lazerPostion.y][lazerPostion.x + 1] = Yellow; // 
+}
+
+void removeLazer()
+{
+	display_draft[lazerPostion.y][lazerPostion.x] = ' ';
+	display_draft[lazerPostion.y][lazerPostion.x + 1] = 0;
+}
+
+void lazer()
+{
+	if (display_draft[lazerPostion.y + 1][lazerPostion.x + 1] == 0)
+	{
+		removeLazer();
+		lazerPostion.y--;
+		drawLazer();
 	}
 }
 
@@ -519,7 +549,7 @@ void moveBallDownLeft()
 			MoveRightDown = 1;
 		else if (BallPosition.y > 23) // fell down
 			DeleteLife();
-		else if (display_draft[BallPosition.y + 1][BallPosition.x - 2] == 220 && greenSurFlag == 1)
+		else if (BallPosition.x >= RacketPosition && BallPosition.x <= RacketPosition + sizeOfRacket && BallPosition.y + 1 == 24 && greenSurFlag == 1)
 		{
 			display_draft[22][134] = '1';
 			display_draft[22][134 + 1] = Yellow;
@@ -550,8 +580,7 @@ void moveBallDownRight()
 			MoveLeftDown = 1;
 		else if (BallPosition.y > 23) // fell down
 			DeleteLife();
-
-		else if (display_draft[BallPosition.y + 1][BallPosition.x + 2] == 220 && greenSurFlag == 1)
+		else if (BallPosition.x >= RacketPosition && BallPosition.x <= RacketPosition + sizeOfRacket && BallPosition.y + 1 == 24 && greenSurFlag == 1)
 		{
 			display_draft[22][128] = '1';
 			display_draft[22][128 + 1] = Yellow;
@@ -758,14 +787,7 @@ void updater()
 				RacketPosition += 2;
 				DrawRacket();
 			}
-			else if (ch == ' ')
-			{
-				if (BallOnRacket)
-				{
-					BallOnRacket = 0;
-					MoveRightUp = 1;
-				}
-			}
+			//else
 			else if (ch == 'f')
 			{
 				if (level == 1)
@@ -810,7 +832,15 @@ void updater()
 					hertz = 1060;
 					level = 3;
 				}
-
+			}
+			if (ch == ' ')
+			{
+				if (BallOnRacket)
+				{
+					BallOnRacket = 0;
+					MoveRightUp = 1;
+				}
+				//	lazer();
 			}
 		} // while	
 		for (i = 0; i < 25; i++)
@@ -1106,31 +1136,31 @@ void lvlDrawer()  //draw the first level
 						switch (j % 29)
 						{
 						case 11:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 15:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 18:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 19:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 20:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 21:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 22:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 23:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						case 24:
-							updateSurprises(i, j / 2, Blue);
+							updateSurprises(i, j / 2, Green);
 							break;
 						}
 					}
@@ -1173,8 +1203,8 @@ void InitializeGlobalVariables()
 		POP AX
 	}
 	score = 0;
-	BallPosition.x = 50; // 3730
-	BallPosition.y = 23;
+	lazerPostion.x = BallPosition.x = 50; // 3730
+	lazerPostion.y = BallPosition.y = 23;
 	RacketPosition = 46; // 3886
 	b800h = (unsigned char far*)0xB8000000;
 	BallOnRacket = 1;
@@ -1185,7 +1215,7 @@ void InitializeGlobalVariables()
 	right = 8;
 	left = 0;
 	surprisesIndex = 0;
-	greenSurFlag = 1;
+	greenSurFlag = 0;
 	hertz = 1200;
 	changeLevel1Flag = 1;
 	changeLevel2Flag = 0;
