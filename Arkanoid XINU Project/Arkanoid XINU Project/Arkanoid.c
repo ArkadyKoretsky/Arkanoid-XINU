@@ -10,6 +10,8 @@
 
 #define ON (1)
 #define OFF (0)
+#define LevelOneTotalScore 11890
+#define LevelTwoTotalScore 13630
 
 /*
 * Gray = 1 / 50p
@@ -61,7 +63,7 @@ volatile INTPROC  new_int9(int mdevno);
 volatile char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
-volatile int hertz, hertzArr[4] = { 1000, 1200, 1100, 1000 };
+volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 300, 200, 500 };
 char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
 char scoreStr[7];
@@ -276,6 +278,52 @@ void cleanScreen()
 	}
 }
 
+void RemoveBall()
+{
+	display_draft[BallPosition.y][BallPosition.x] = ' ';
+	display_draft[BallPosition.y][BallPosition.x + 1] = 0;
+}
+
+void nextLevel(int levelNum)
+{
+	int i, j;
+	RemoveBall();
+	if (levelNum == 1)
+	{
+		send(lvl2DrawerPID, 1);
+	}
+	else if (levelNum == 2)
+	{
+		send(lvl3DrawerPID, 1);
+	}
+	for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
+	{
+		display_draft[12][i] = ' ';
+		display_draft[12][i + 1] = Black;
+	}
+	for (i = 0; i < 4; i++)  //next level sounds
+	{
+		hertz = hertz1Arr[i];
+		Sound();
+		sleep(1);
+	}
+	NoSound();
+	hertz = 1060;
+	level = levelNum + 1;
+}
+
+void checkScore()
+{
+	if (level == 1 && score >= LevelOneTotalScore)
+	{
+		nextLevel(level);
+	}
+	else if (level == 2 && score >= LevelOneTotalScore + LevelTwoTotalScore)
+	{
+		nextLevel(level);
+	}
+}
+
 void printScore(int score)
 {
 	int i, j;
@@ -288,23 +336,24 @@ void printScore(int score)
 	}
 	if (score >= 20 && changeLevel1Flag == 1)
 	{
-		for (i = 110, j = 0; j < strlen(nextLevelStr); j++, i += 2)
+		/*for (i = 110, j = 0; j < strlen(nextLevelStr); j++, i += 2)
 		{
 			display_draft[14][i] = nextLevelStr[j];
 			display_draft[14][i + 1] = Yellow;
-		}
+		}*/
 		changeLevel1Flag = 0;
 		changeLevel2Flag = 1;
 	}
 	if (score >= 300 && changeLevel2Flag == 1 && level == 2)
 	{
-		for (i = 110, j = 0; j < 22; j++, i += 2)
+		/*for (i = 110, j = 0; j < 22; j++, i += 2)
 		{
 			display_draft[14][i] = nextLevelStr[j];
 			display_draft[14][i + 1] = Yellow;
-		}
+		}*/
 		changeLevel2Flag = 0;
 	}
+	checkScore();
 }
 
 void removeSurprise(int index)
@@ -331,17 +380,19 @@ void DrawBall()
 	display_draft[BallPosition.y][BallPosition.x + 1] = 4; // red
 }
 
-void RemoveBall()
+void RemoveRacket(int direction) /* removing the parts of the racket and the ball */
 {
-	display_draft[BallPosition.y][BallPosition.x] = ' ';
-	display_draft[BallPosition.y][BallPosition.x + 1] = 0;
+	display_draft[24][RacketPosition + direction] = ' ';
+	display_draft[24][RacketPosition + direction + 1] = 0;
+	if (BallOnRacket)
+		RemoveBall();
 }
 
 void DeleteLife()
 {
 	char* gameOverStr = "Game Over";
 	int i, j;
-	//lifeCounter--;
+	lifeCounter--;
 	if (lifeCounter > 0)
 	{
 		display_draft[5][PositionOfTheLastLife] = ' ';
@@ -366,11 +417,20 @@ void DeleteLife()
 		display_draft[5][PositionOfTheLastLife] = ' ';
 		display_draft[5][PositionOfTheLastLife + 1] = 0;
 		RemoveBall();
+		cleanScreen();
 		for (i = 0, j = 0; i < 18; i += 2, j++)
 		{
 			display_draft[16][42 + i] = gameOverStr[j];
 			display_draft[16][42 + 1 + i] = Purple;
 		}
+		for (i = 0; i < 4; i++)  //next level sounds
+		{
+			hertz = hertz2Arr[i];
+			Sound();
+			sleep(1);
+		}
+		NoSound();
+		hertz = 1060;
 	}
 }
 
@@ -386,13 +446,6 @@ void DrawRacket() /* drawing the racket on the screen */
 		DrawBall();
 }
 
-void RemoveRacket(int direction) /* removing the parts of the racket and the ball */
-{
-	display_draft[24][RacketPosition + direction] = ' ';
-	display_draft[24][RacketPosition + direction + 1] = 0;
-	if (BallOnRacket)
-		RemoveBall();
-}
 
 void removeDoubleRacket()
 {
@@ -481,33 +534,6 @@ void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for laze
 	}
 }
 
-void nextLevel(int levelNum)
-{
-	int i, j;
-	RemoveBall();
-	if (levelNum == 1)
-	{
-		send(lvl2DrawerPID, 1);
-	}
-	else if (levelNum == 2)
-	{
-		send(lvl3DrawerPID, 1);
-	}
-	for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
-	{
-		display_draft[12][i] = ' ';
-		display_draft[12][i + 1] = Black;
-	}
-	for (i = 0; i < 4; i++)  //next level sounds
-	{
-		hertz = hertzArr[i];
-		Sound();
-		sleep(1);
-	}
-	NoSound();
-	hertz = 1060;
-	level = levelNum + 1;
-}
 
 void dropSur()
 {
@@ -1262,7 +1288,7 @@ void InitializeGlobalVariables()
 	b800h = (unsigned char far*)0xB8000000;
 	BallOnRacket = 1;
 	MoveRightDown = MoveLeftDown = MoveLeftUp = MoveRightUp = 0;
-	PositionOfTheLastLife = 134;
+	PositionOfTheLastLife = 132;
 	lifeCounter = 3;
 	sizeOfRacket = 10;
 	right = 8;
