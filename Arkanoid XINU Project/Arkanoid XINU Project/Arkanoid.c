@@ -481,6 +481,34 @@ void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for laze
 	}
 }
 
+void nextLevel(int levelNum)
+{
+	int i, j;
+	RemoveBall();
+	if (levelNum == 1)
+	{
+		send(lvl2DrawerPID, 1);
+	}
+	else if (levelNum == 2)
+	{
+		send(lvl3DrawerPID, 1);
+	}
+	for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
+	{
+		display_draft[12][i] = ' ';
+		display_draft[12][i + 1] = Black;
+	}
+	for (i = 0; i < 4; i++)  //next level sounds
+	{
+		hertz = hertzArr[i];
+		Sound();
+		sleep(1);
+	}
+	NoSound();
+	hertz = 1060;
+	level = levelNum + 1;
+}
+
 void dropSur()
 {
 	int i;
@@ -528,6 +556,8 @@ void dropSur()
 					case Red:
 						resume(create(redSurprise, INITSTK, INITPRIO, "redSurprise", 0));
 						break;
+					case Purple:
+						nextLevel(2);
 					}
 				}
 			}
@@ -754,6 +784,8 @@ void set_new_int9_newisr()
 		}
 } // set_new_int9_newisr
 
+
+
 void receiver()
 {
 	while (1)
@@ -844,41 +876,11 @@ void updater()
 			{
 				if (level == 1)
 				{
-					RemoveBall();
-					send(lvl2DrawerPID, 1);
-					for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
-					{
-						display_draft[12][i] = ' ';
-						display_draft[12][i + 1] = Black;
-					}
-					for (i = 0; i < 4; i++)  //next level sounds
-					{
-						hertz = hertzArr[i];
-						Sound();
-						sleep(1);
-					}
-					NoSound();
-					hertz = 1060;
-					level = 2;
+					nextLevel(level);
 				}
 				else if (level == 2)
 				{
-					RemoveBall();
-					send(lvl3DrawerPID, 1);
-					for (i = 590, j = 0; j < 22; j++, i += 2)  //removing next level message
-					{
-						display_draft[12][i] = ' ';
-						display_draft[12][i + 1] = Black;
-					}
-					for (i = 0; i < 4; i++)  //next level sounds
-					{
-						hertz = hertzArr[i];
-						Sound();
-						sleep(1);
-					}
-					NoSound();
-					hertz = 1060;
-					level = 3;
+					nextLevel(level);
 				}
 			}
 			else if (ch == ' ')
@@ -976,7 +978,7 @@ void updateSurprises(int i, int j, color color)
 
 void lvl3Drawer()  //draw the second level
 {
-	int i, j, space = 0, msg = receive();
+	int i, j, space = 0, msg = receive(), randNum1, randNum2;
 	if (msg == 1) //receive from frameDraw
 	{
 		cleanScreen();
@@ -1027,6 +1029,21 @@ void lvl3Drawer()  //draw the second level
 	}
 	DrawRacket();
 	DrawBall();
+	while (1)
+	{
+		randNum1 = (rand() % 96) + 2;
+		if (randNum1 % 2 == 0)
+		{
+			randNum2 = (rand() % 2) + 1;
+			display_draft[randNum2][randNum1] = 234;
+			display_draft[randNum2][randNum1 + 1] = 3;
+			sleep(1);
+			display_draft[randNum2][randNum1] = ' ';
+			display_draft[randNum2][randNum1 + 1] = 0;
+		}
+
+
+	}
 }
 
 void lvl2Drawer()  //draw the second level
@@ -1175,7 +1192,7 @@ void lvlDrawer()  //draw the first level
 							updateSurprises(i, j / 2, Red);
 							break;
 						case 15:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, Purple);
 							break;
 						case 18:
 							updateSurprises(i, j / 2, Red);
