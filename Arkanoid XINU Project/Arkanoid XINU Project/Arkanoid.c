@@ -63,7 +63,7 @@ volatile INTPROC  new_int9(int mdevno);
 volatile char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
 unsigned char far* b800h;
-volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 300, 200, 500 };
+volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 80, 50, 30 };
 char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
 char scoreStr[7];
