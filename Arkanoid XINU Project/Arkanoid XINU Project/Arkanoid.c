@@ -7,7 +7,6 @@
 #include <sleep.h>
 #include <butler.h>
 
-
 #define ON (1)
 #define OFF (0)
 #define LevelOneTotalScore 11890
@@ -39,6 +38,14 @@ typedef enum color
 	Black = 0
 } color;
 
+typedef enum direction
+{
+	RightUp = 0,
+	RightDown = 1,
+	LeftUp = 2,
+	LeftDown = 3
+} direction;
+
 typedef struct Position
 {
 	int x;
@@ -55,20 +62,21 @@ typedef struct brick
 
 extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
-int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID, lvl3DrawerPID; // existing varibles
-int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };                            // existing arrays
-volatile int greenSurFlag, redSurFlag, left, right, sizeOfRacket, ballSpeed, perSpeed, BallOnRacket, MoveRightUp, MoveLeftUp, MoveRightDown, MoveLeftDown, surpriseIsDropped[10] = { 0 };
+int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID, lvl3DrawerPID;
+int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };
+volatile int greenSurFlag, redSurFlag, left, right, sizeOfRacket, ballSpeed, perSpeed, BallOnRacket, surpriseIsDropped[10] = { 0 };
 volatile unsigned int score, mytod;
 volatile INTPROC  new_int9(int mdevno);
 volatile char display_draft[25][160];
-volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex;
+volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex, ballsCounter;
 unsigned char far* b800h;
 volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 80, 50, 30 };
 char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
 char scoreStr[7];
+volatile int BallsAndDirections[3][4]; // BallsAndDirections[0][0..3] - the directions of the first (main) ball
 Brick matrix[25][80];
-Position BallPosition, surprisePosition[10] = { 0 };
+Position BallPosition[3], surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
 
 void interrupt myTimerISR(void)
@@ -278,16 +286,22 @@ void cleanScreen()
 	}
 }
 
-void RemoveBall()
+void RemoveBall(int indexOfTheBall)
 {
-	display_draft[BallPosition.y][BallPosition.x] = ' ';
-	display_draft[BallPosition.y][BallPosition.x + 1] = 0;
+	display_draft[BallPosition[indexOfTheBall].y][BallPosition[indexOfTheBall].x] = ' ';
+	display_draft[BallPosition[indexOfTheBall].y][BallPosition[indexOfTheBall].x + 1] = 0;
+}
+
+void DrawBall(int indexOfTheBall)
+{
+	display_draft[BallPosition[indexOfTheBall].y][BallPosition[indexOfTheBall].x] = 233; // 'o'
+	display_draft[BallPosition[indexOfTheBall].y][BallPosition[indexOfTheBall].x + 1] = 4; // red
 }
 
 void nextLevel(int levelNum)
 {
 	int i, j;
-	RemoveBall();
+	//RemoveBall();
 	if (levelNum == 1)
 	{
 		send(lvl2DrawerPID, 1);
@@ -327,7 +341,7 @@ void checkScore()
 void printScore(int score)
 {
 	int i, j;
-	char nextLevelStr[30] = "Press F1 to next level";
+	//char nextLevelStr[30] = "Press F1 to next level";
 	sprintf(scoreStr, "%d", score);
 	for (i = 128, j = 0; j < strlen(scoreStr); j++, i += 2)
 	{
@@ -374,63 +388,37 @@ void drawSurprise(int index, color surpriseColor)
 		display_draft[surprisePosition[index].y][surprisePosition[index].x + 1] = surpriseColor;
 }
 
-void DrawBall()
-{
-	display_draft[BallPosition.y][BallPosition.x] = 233; // 'o'
-	display_draft[BallPosition.y][BallPosition.x + 1] = 4; // red
-}
-
-void RemoveRacket(int direction) /* removing the parts of the racket and the ball */
+void RemoveRacket(int direction)
 {
 	display_draft[24][RacketPosition + direction] = ' ';
 	display_draft[24][RacketPosition + direction + 1] = 0;
 	if (BallOnRacket)
-		RemoveBall();
+	{
+		if (ballsCounter > 1)
+		{
+			RemoveBall(1);
+			RemoveBall(2);
+		}
+		RemoveBall(0);
+	}
 }
 
-void DeleteLife()
+void removeDoubleRacket()
 {
-	char* gameOverStr = "Game Over";
-	int i, j;
-	lifeCounter--;
-	if (lifeCounter > 0)
+	int i;
+	for (i = 0; i < 10; i += 2)
 	{
-		display_draft[5][PositionOfTheLastLife] = ' ';
-		display_draft[5][PositionOfTheLastLife + 1] = 0;
-		PositionOfTheLastLife -= 2;
-		RemoveBall();
-		BallPosition.y = 23;
-		if (sizeOfRacket == 10)
-		{
-			BallPosition.x = RacketPosition + (sizeOfRacket / 2) - 1;
-		}
-		else
-		{
-			BallPosition.x = RacketPosition + (sizeOfRacket / 2);
-		}
-
-		DrawBall();
-		BallOnRacket = 1;
+		display_draft[24][RacketPosition + 10 + i] = ' ';
+		display_draft[24][RacketPosition + 10 + i + 1] = 0;
 	}
-	else
+	if (BallOnRacket)
 	{
-		display_draft[5][PositionOfTheLastLife] = ' ';
-		display_draft[5][PositionOfTheLastLife + 1] = 0;
-		RemoveBall();
-		cleanScreen();
-		for (i = 0, j = 0; i < 18; i += 2, j++)
+		if (ballsCounter > 1)
 		{
-			display_draft[16][42 + i] = gameOverStr[j];
-			display_draft[16][42 + 1 + i] = Purple;
+			RemoveBall(1);
+			RemoveBall(2);
 		}
-		for (i = 0; i < 4; i++)  //next level sounds
-		{
-			hertz = hertz2Arr[i];
-			Sound();
-			sleep(1);
-		}
-		NoSound();
-		hertz = 1060;
+		RemoveBall(0);
 	}
 }
 
@@ -443,20 +431,247 @@ void DrawRacket() /* drawing the racket on the screen */
 		display_draft[24][RacketPosition + i + 1] = 112;
 	}
 	if (BallOnRacket)
-		DrawBall();
+	{
+		if (ballsCounter > 1)
+		{
+			DrawBall(1);
+			DrawBall(2);
+		}
+		DrawBall(0);
+	}
 }
 
+void ballUpdater(int indexOfTheBall);
 
-void removeDoubleRacket()
+void DeleteLife()
 {
-	int i;
-	for (i = 0; i < 10; i += 2)
+	char* gameOverStr = "Game Over";
+	int i, j;
+	if (ballsCounter == 1)
 	{
-		display_draft[24][RacketPosition + 10 + i] = ' ';
-		display_draft[24][RacketPosition + 10 + i + 1] = 0;
+		lifeCounter--;
+		if (lifeCounter > 0)
+		{
+			display_draft[5][PositionOfTheLastLife] = ' ';
+			display_draft[5][PositionOfTheLastLife + 1] = 0;
+			PositionOfTheLastLife -= 2;
+			RemoveBall(0);
+			BallPosition[0].y = 23;
+			if (sizeOfRacket == 10)
+			{
+				BallPosition[0].x = RacketPosition + (sizeOfRacket / 2) - 1;
+			}
+			else
+			{
+				BallPosition[0].x = RacketPosition + (sizeOfRacket / 2);
+			}
+
+			DrawBall(0);
+			BallOnRacket = 1;
+		}
+		else
+		{
+			display_draft[5][PositionOfTheLastLife] = ' ';
+			display_draft[5][PositionOfTheLastLife + 1] = 0;
+			RemoveBall(0);
+			cleanScreen();
+			for (i = 0, j = 0; i < 18; i += 2, j++)
+			{
+				display_draft[16][42 + i] = gameOverStr[j];
+				display_draft[16][42 + 1 + i] = Purple;
+			}
+			for (i = 0; i < 4; i++)  //next level sounds
+			{
+				hertz = hertz2Arr[i];
+				Sound();
+				sleep(1);
+			}
+			NoSound();
+			hertz = 1060;
+		}
 	}
-	if (BallOnRacket)
-		RemoveBall();
+	else
+	{
+		if (--ballsCounter == 1)
+		{
+			j = 0;
+			if (BallPosition[1].y < 24)
+				j = 1;
+			if (BallPosition[2].y < 24)
+				j = 2;
+			if (j != 0) // make the ball that left to be on the first index
+			{
+				BallPosition[0].x = BallPosition[j].x;
+				BallPosition[0].y = BallPosition[j].y;
+				for (i = 0; i < 4; i++)
+					BallsAndDirections[0][i] = BallsAndDirections[j][i]; // the j here is the index of the ball that didn't fall, it's not a reverse of rows and columns
+				ballUpdater(0);
+			}
+		}
+	}
+}
+
+void clearAllDirections(int indexOfTheBall)
+{
+	BallsAndDirections[indexOfTheBall][RightUp] = BallsAndDirections[indexOfTheBall][RightDown] = BallsAndDirections[indexOfTheBall][LeftUp] = BallsAndDirections[indexOfTheBall][LeftDown] = 0;
+	if (ballsCounter == 1)
+		BallOnRacket = 1;
+}
+
+void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for lazer
+{
+	int k = 0;
+	if (matrix[i][j / 2].enable == true)
+	{
+		Sound();
+		if (matrix[i][j / 2].hits >= 1)
+		{
+			if (type == 1)
+			{
+				matrix[i][j / 2].hits--;
+			}
+			else
+			{
+				matrix[i][j / 2].hits -= 2;
+			}
+		}
+		if (matrix[i][j / 2].hits <= 0)
+		{
+			score += matrix[i][j / 2].score;
+			printScore(score);
+			display_draft[i][j] = ' ';
+			display_draft[i][j + 1] = 0;
+			if (matrix[i][j / 2].surprise != Black)
+			{
+				matrix[i][j / 2].surprise = Black;
+				while (surprisePosition[k].x != j || surprisePosition[k].y != i)
+					k++;
+				surpriseIsDropped[k] = 1;
+			}
+		}
+	}
+}
+
+void moveBallDownLeft(int indexOfTheBall)
+{
+	if (BallsAndDirections[indexOfTheBall][LeftDown] == 1 && display_draft[BallPosition[indexOfTheBall].y + 1][BallPosition[indexOfTheBall].x - 1] == 0 && BallPosition[indexOfTheBall].y < 24)
+	{
+		RemoveBall(indexOfTheBall);
+		BallPosition[indexOfTheBall].y++;
+		BallPosition[indexOfTheBall].x -= 2;
+		DrawBall(indexOfTheBall);
+		NoSound();
+	}
+	else
+	{
+		BallsAndDirections[indexOfTheBall][LeftDown] = 0;
+		if (BallPosition[indexOfTheBall].x == 2) // western wall
+			BallsAndDirections[indexOfTheBall][RightDown] = 1;
+		else if (BallPosition[indexOfTheBall].y > 23) // fell down
+			DeleteLife();
+		else if (BallPosition[indexOfTheBall].x >= RacketPosition && BallPosition[indexOfTheBall].x <= RacketPosition + sizeOfRacket && BallPosition[indexOfTheBall].y + 1 == 24 && greenSurFlag == 1)
+		{
+			display_draft[22][134] = '1';
+			display_draft[22][134 + 1] = Yellow;
+			clearAllDirections(indexOfTheBall);
+		}
+		else
+		{
+			BreakTheBrick(BallPosition[indexOfTheBall].y + 1, BallPosition[indexOfTheBall].x - 2, 0);
+			BallsAndDirections[indexOfTheBall][LeftUp] = 1;
+		}
+	}
+}
+
+void moveBallDownRight(int indexOfTheBall)
+{
+	if (BallsAndDirections[indexOfTheBall][RightDown] == 1 && display_draft[BallPosition[indexOfTheBall].y + 1][BallPosition[indexOfTheBall].x + 3] == 0 && BallPosition[indexOfTheBall].y < 24)
+	{
+		RemoveBall(indexOfTheBall);
+		BallPosition[indexOfTheBall].y++;
+		BallPosition[indexOfTheBall].x += 2;
+		DrawBall(indexOfTheBall);
+		NoSound();
+	}
+	else
+	{
+		BallsAndDirections[indexOfTheBall][RightDown] = 0;
+		if (BallPosition[indexOfTheBall].x == 98) // eastern wall
+			BallsAndDirections[indexOfTheBall][LeftDown] = 1;
+		else if (BallPosition[indexOfTheBall].y > 23) // fell down
+			DeleteLife();
+		else if (BallPosition[indexOfTheBall].x >= RacketPosition && BallPosition[indexOfTheBall].x <= RacketPosition + sizeOfRacket && BallPosition[indexOfTheBall].y + 1 == 24 && greenSurFlag == 1)
+		{
+			display_draft[22][128] = '1';
+			display_draft[22][128 + 1] = Yellow;
+			clearAllDirections(indexOfTheBall);
+		}
+		else
+		{
+			BreakTheBrick(BallPosition[indexOfTheBall].y + 1, BallPosition[indexOfTheBall].x + 2, 0);
+			BallsAndDirections[indexOfTheBall][RightUp] = 1;
+		}
+	}
+}
+
+void moveBallUpRight(int indexOfTheBall)
+{
+	if (BallsAndDirections[indexOfTheBall][RightUp] == 1 && display_draft[BallPosition[indexOfTheBall].y - 1][BallPosition[indexOfTheBall].x + 3] == 0)
+	{
+		RemoveBall(indexOfTheBall);
+		BallPosition[indexOfTheBall].y--;
+		BallPosition[indexOfTheBall].x += 2;
+		DrawBall(indexOfTheBall);
+	}
+	else
+	{
+		BallsAndDirections[indexOfTheBall][RightUp] = 0;
+		if (BallPosition[indexOfTheBall].x == 98) // eastern wall
+			BallsAndDirections[indexOfTheBall][LeftUp] = 1;
+		else
+		{
+			BreakTheBrick(BallPosition[indexOfTheBall].y - 1, BallPosition[indexOfTheBall].x + 2, 0);
+			BallsAndDirections[indexOfTheBall][RightDown] = 1;
+		}
+	}
+}
+
+void moveBallUpLeft(int indexOfTheBall)
+{
+	if (BallsAndDirections[indexOfTheBall][LeftUp] == 1 && display_draft[BallPosition[indexOfTheBall].y - 1][BallPosition[indexOfTheBall].x - 1] == 0)
+	{
+		RemoveBall(indexOfTheBall);
+		BallPosition[indexOfTheBall].y--;
+		BallPosition[indexOfTheBall].x -= 2;
+		DrawBall(indexOfTheBall);
+	}
+	else
+	{
+		BallsAndDirections[indexOfTheBall][LeftUp] = 0;
+		if (BallPosition[indexOfTheBall].x == 2) // western wall
+			BallsAndDirections[indexOfTheBall][RightUp] = 1;
+		else
+		{
+			BreakTheBrick(BallPosition[indexOfTheBall].y - 1, BallPosition[indexOfTheBall].x - 2, 0);
+			BallsAndDirections[indexOfTheBall][LeftDown] = 1;
+		}
+	}
+}
+
+void ballUpdater(int indexOfTheBall)
+{
+	while (1)
+	{
+		receive();
+		if (BallsAndDirections[indexOfTheBall][RightUp])
+			moveBallUpRight(indexOfTheBall);
+		else if (BallsAndDirections[indexOfTheBall][LeftUp])
+			moveBallUpLeft(indexOfTheBall);
+		else if (BallsAndDirections[indexOfTheBall][RightDown])
+			moveBallDownRight(indexOfTheBall);
+		else if (BallsAndDirections[indexOfTheBall][LeftDown])
+			moveBallDownLeft(indexOfTheBall);
+	}
 }
 
 void orangeSurprise()
@@ -500,40 +715,39 @@ void redSurprise()
 	redSurFlag = 0;
 }
 
-void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for lazer
+void whiteSurprise()
 {
-	int k = 0;
-	if (matrix[i][j / 2].enable == true)
+	ballsCounter = 3;
+	BallPosition[1].x = BallPosition[2].x = BallPosition[0].x;
+	BallPosition[1].y = BallPosition[2].y = BallPosition[0].y;
+	if (BallOnRacket)
 	{
-		Sound();
-		if (matrix[i][j / 2].hits >= 1)
+		BallsAndDirections[0][RightUp] = 1;
+		BallsAndDirections[1][LeftUp] = 1;
+		BallPosition[2].x -= 2; // to make him fly straight
+		BallsAndDirections[2][RightUp] = 1;
+	}
+	else
+	{
+		if (BallsAndDirections[0][RightUp])
 		{
-			if (type == 1)
-			{
-				matrix[i][j / 2].hits--;
-			}
-			else
-			{
-				matrix[i][j / 2].hits -= 2;
-			}
+			BallsAndDirections[1][LeftUp] = 1;
+			BallsAndDirections[2][LeftDown] = 1;
 		}
-		if (matrix[i][j / 2].hits <= 0)
+		else if (BallsAndDirections[0][LeftUp])
 		{
-			score += matrix[i][j / 2].score;
-			printScore(score);
-			display_draft[i][j] = ' ';
-			display_draft[i][j + 1] = 0;
-			if (matrix[i][j / 2].surprise != Black)
-			{
-				matrix[i][j / 2].surprise = Black;
-				while (surprisePosition[k].x != j || surprisePosition[k].y != i)
-					k++;
-				surpriseIsDropped[k] = 1;
-			}
+			BallsAndDirections[1][RightUp] = 1;
+			BallsAndDirections[2][RightDown] = 1;
+		}
+		else if (BallsAndDirections[0][RightDown] || BallsAndDirections[0][LeftDown])
+		{
+			BallsAndDirections[1][RightUp] = 1;
+			BallsAndDirections[2][LeftUp] = 1;
 		}
 	}
+	resume(create(ballUpdater, INITSTK, INITPRIO, "Ball2Updater", 1, 1));
+	resume(create(ballUpdater, INITSTK, INITPRIO, "Ball3Updater", 1, 2));
 }
-
 
 void dropSur()
 {
@@ -584,6 +798,10 @@ void dropSur()
 						break;
 					case Purple:
 						nextLevel(2);
+						break;
+					case White:
+						whiteSurprise();
+						break;
 					}
 				}
 			}
@@ -629,135 +847,7 @@ void lazer()
 	}
 }
 
-void clearAllBalls()
-{
-	MoveLeftDown = MoveRightDown = MoveLeftUp = MoveRightUp = 0;
-	BallOnRacket = 1;
-}
-
-void moveBallDownLeft()
-{
-	if (MoveLeftDown == 1 && display_draft[BallPosition.y + 1][BallPosition.x - 1] == 0 && BallPosition.y < 24)
-	{
-		RemoveBall();
-		BallPosition.y++;
-		BallPosition.x -= 2;
-		DrawBall();
-		NoSound();
-	}
-	else
-	{
-		MoveLeftDown = 0;
-		if (BallPosition.x == 2) // western wall
-			MoveRightDown = 1;
-		else if (BallPosition.y > 23) // fell down
-			DeleteLife();
-		else if (BallPosition.x >= RacketPosition && BallPosition.x <= RacketPosition + sizeOfRacket && BallPosition.y + 1 == 24 && greenSurFlag == 1)
-		{
-			display_draft[22][134] = '1';
-			display_draft[22][134 + 1] = Yellow;
-			clearAllBalls();
-		}
-		else
-		{
-			BreakTheBrick(BallPosition.y + 1, BallPosition.x - 2, 0);
-			MoveLeftUp = 1;
-		}
-	}
-}
-
-void moveBallDownRight()
-{
-	if (MoveRightDown == 1 && display_draft[BallPosition.y + 1][BallPosition.x + 3] == 0 && BallPosition.y < 24)
-	{
-		RemoveBall();
-		BallPosition.y++;
-		BallPosition.x += 2;
-		DrawBall();
-		NoSound();
-	}
-	else
-	{
-		MoveRightDown = 0;
-		if (BallPosition.x == 98) // eastern wall
-			MoveLeftDown = 1;
-		else if (BallPosition.y > 23) // fell down
-			DeleteLife();
-		else if (BallPosition.x >= RacketPosition && BallPosition.x <= RacketPosition + sizeOfRacket && BallPosition.y + 1 == 24 && greenSurFlag == 1)
-		{
-			display_draft[22][128] = '1';
-			display_draft[22][128 + 1] = Yellow;
-			clearAllBalls();
-		}
-		else
-		{
-			BreakTheBrick(BallPosition.y + 1, BallPosition.x + 2, 0);
-			MoveRightUp = 1;
-		}
-	}
-}
-
-void moveBallUpRight()
-{
-	if (MoveRightUp == 1 && display_draft[BallPosition.y - 1][BallPosition.x + 3] == 0)
-	{
-		RemoveBall();
-		BallPosition.y--;
-		BallPosition.x += 2;
-		DrawBall();
-	}
-	else
-	{
-		MoveRightUp = 0;
-		if (BallPosition.x == 98) // eastern wall
-			MoveLeftUp = 1;
-		else
-		{
-			BreakTheBrick(BallPosition.y - 1, BallPosition.x + 2, 0);
-			MoveRightDown = 1;
-		}
-	}
-}
-
-void moveBallUpLeft()
-{
-	if (MoveLeftUp == 1 && display_draft[BallPosition.y - 1][BallPosition.x - 1] == 0)
-	{
-		RemoveBall();
-		BallPosition.y--;
-		BallPosition.x -= 2;
-		DrawBall();
-	}
-	else
-	{
-		MoveLeftUp = 0;
-		if (BallPosition.x == 2) // western wall
-			MoveRightUp = 1;
-		else
-		{
-			BreakTheBrick(BallPosition.y - 1, BallPosition.x - 2, 0);
-			MoveLeftDown = 1;
-		}
-	}
-}
-
-void ballUpdater()
-{
-	while (1)
-	{
-		receive();
-		if (MoveRightUp)
-			moveBallUpRight();
-		else if (MoveLeftUp)
-			moveBallUpLeft();
-		else if (MoveRightDown)
-			moveBallDownRight();
-		else if (MoveLeftDown)
-			moveBallDownLeft();
-	}
-}
-
-INTPROC new_int9(int mdevno)
+INTPROC new_int9()
 {
 	char result = 0;
 	int scan = 0, ascii = 0, i;
@@ -810,8 +900,6 @@ void set_new_int9_newisr()
 		}
 } // set_new_int9_newisr
 
-
-
 void receiver()
 {
 	while (1)
@@ -824,7 +912,6 @@ void receiver()
 			front = 0;
 		// getc(CONSOLE);
 	} // while
-
 } //  receiver
 
 void displayer(void)
@@ -852,20 +939,20 @@ void displayer(void)
 			display_draft[12][i] = str[j];
 			display_draft[12][i + 1] = White;
 		}
-		b800h[1090] = (BallPosition.x / 10) + '0';
+		b800h[1090] = (BallPosition[0].x / 10) + '0';
 		b800h[1090 + 1] = Green;
-		b800h[1090 + 2] = BallPosition.x % 10 + '0';
+		b800h[1090 + 2] = BallPosition[0].x % 10 + '0';
 		b800h[1090 + 3] = Green;
-		b800h[1250] = (BallPosition.y / 10) + '0';
+		b800h[1250] = (BallPosition[0].y / 10) + '0';
 		b800h[1250 + 1] = Green;
-		b800h[1250 + 2] = BallPosition.y % 10 + '0';
+		b800h[1250 + 2] = BallPosition[0].y % 10 + '0';
 		b800h[1250 + 3] = Green;
 		display_draft[19][130] = RacketPosition / 10 + '0';
 		display_draft[19][130 + 1] = Yellow;
 		display_draft[19][130 + 2] = RacketPosition % 10 + '0';
 		display_draft[19][130 + 3] = Yellow;
 	} // while
-} // prntr
+} // displayer
 
 void updater()
 {
@@ -885,7 +972,14 @@ void updater()
 			{
 				RemoveRacket(right);
 				if (BallOnRacket)
-					BallPosition.x -= 2;
+				{
+					if (ballsCounter > 1)
+					{
+						BallPosition[1].x -= 2;
+						BallPosition[2].x -= 2;
+					}
+					BallPosition[0].x -= 2;
+				}
 				RacketPosition -= 2;
 				DrawRacket();
 			}
@@ -893,11 +987,17 @@ void updater()
 			{
 				RemoveRacket(left);
 				if (BallOnRacket)
-					BallPosition.x += 2;
+				{
+					if (ballsCounter > 1)
+					{
+						BallPosition[1].x += 2;
+						BallPosition[2].x += 2;
+					}
+					BallPosition[0].x += 2;
+				}
 				RacketPosition += 2;
 				DrawRacket();
 			}
-			//else
 			else if (ch == 'f')
 			{
 				if (level == 1)
@@ -914,7 +1014,12 @@ void updater()
 				if (BallOnRacket)
 				{
 					BallOnRacket = 0;
-					MoveRightUp = 1;
+					if (ballsCounter > 1)
+					{
+						BallsAndDirections[1][LeftUp] = 1;
+						BallsAndDirections[2][RightUp] = 1;
+					}
+					BallsAndDirections[0][RightUp] = 1;
 				}
 				if (redSurFlag)
 					resume(create(lazer, INITSTK, INITPRIO, "Lazer", 0));
@@ -1002,9 +1107,37 @@ void updateSurprises(int i, int j, color color)
 	surprisePosition[surprisesIndex++].y = i;
 }
 
+/* reset the ball and the racket to be in the middle */
+void resetBallAndRacketPositions()
+{
+	int i, j;
+	for (i = 2; i < 98; i+=2) // delete the whole racket
+	{
+		display_draft[24][i] = ' ';
+		display_draft[24][i + 1] = 0;
+	}
+	RacketPosition = 46; // 3886
+	DrawRacket();
+	if (ballsCounter > 1)
+	{
+		RemoveBall(1);
+		RemoveBall(2);
+		ballsCounter = 1;
+	}
+	if (level != 1)
+		RemoveBall(0);
+	for (i = 0; i < 3; i++)
+		for (j = 0; j < 4; j++)
+			BallsAndDirections[i][j] = 0;
+	BallPosition[0].x = 50; // 3730
+	BallPosition[0].y = 23;
+	BallOnRacket = 1;
+	DrawBall(0);
+}
+
 void lvl3Drawer()  //draw the second level
 {
-	int i, j, space = 0, msg = receive(), randNum1, randNum2;
+	int i, j, msg = receive(), randNum1, randNum2;
 	if (msg == 1) //receive from frameDraw
 	{
 		cleanScreen();
@@ -1053,8 +1186,7 @@ void lvl3Drawer()  //draw the second level
 
 
 	}
-	DrawRacket();
-	DrawBall();
+	resetBallAndRacketPositions();
 	while (1)
 	{
 		randNum1 = (rand() % 96) + 2;
@@ -1067,14 +1199,12 @@ void lvl3Drawer()  //draw the second level
 			display_draft[randNum2][randNum1] = ' ';
 			display_draft[randNum2][randNum1 + 1] = 0;
 		}
-
-
 	}
 }
 
 void lvl2Drawer()  //draw the second level
 {
-	int i, j, space = 0, msg = receive();
+	int i, j, msg = receive();
 	if (msg == 1) //receive from frameDraw
 	{
 		for (i = 0; i < 25; i++)
@@ -1148,13 +1278,12 @@ void lvl2Drawer()  //draw the second level
 			}
 		}
 	}
-	DrawRacket();
-	DrawBall();
+	resetBallAndRacketPositions();
 }
 
 void lvlDrawer()  //draw the first level
 {
-	int i, j, space = 0, msg = receive();
+	int i, j, msg = receive();
 	if (msg == 1) //receive from frameDraw
 	{
 		for (i = 0; i < 25; i++)
@@ -1215,31 +1344,31 @@ void lvlDrawer()  //draw the first level
 						switch (j % 29)
 						{
 						case 11:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 15:
-							updateSurprises(i, j / 2, Purple);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 18:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 19:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 20:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 21:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 22:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 23:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						case 24:
-							updateSurprises(i, j / 2, Red);
+							updateSurprises(i, j / 2, White);
 							break;
 						}
 					}
@@ -1247,8 +1376,7 @@ void lvlDrawer()  //draw the first level
 			}
 		}
 	}
-	DrawRacket();
-	DrawBall();
+	resetBallAndRacketPositions();
 }
 
 SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
@@ -1271,7 +1399,7 @@ SYSCALL schedule(int no_of_pids, int cycle_length, int pid1, ...)
 
 void InitializeGlobalVariables()
 {
-	int i;
+	int i, j;
 	asm{
 		PUSH AX
 		PUSH DX
@@ -1282,14 +1410,10 @@ void InitializeGlobalVariables()
 		POP AX
 	}
 	score = 0;
-	BallPosition.x = 50; // 3730
-	BallPosition.y = 23;
-	RacketPosition = 46; // 3886
 	b800h = (unsigned char far*)0xB8000000;
-	BallOnRacket = 1;
-	MoveRightDown = MoveLeftDown = MoveLeftUp = MoveRightUp = 0;
 	PositionOfTheLastLife = 132;
 	lifeCounter = 3;
+	ballsCounter = 1;
 	sizeOfRacket = 10;
 	right = 8;
 	left = 0;
@@ -1343,7 +1467,7 @@ void xmain()
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
-	resume(ballPID = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 0));
+	resume(ballPID = create(ballUpdater, INITSTK, INITPRIO, "Ball1Updater", 1, 0));
 	resume(dropSurPID = create(dropSur, INITSTK, INITPRIO, "dropSur", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
