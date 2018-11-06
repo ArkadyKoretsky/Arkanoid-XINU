@@ -11,6 +11,7 @@
 #define OFF (0)
 #define LevelOneTotalScore 11890
 #define LevelTwoTotalScore 13630
+#define amountOfBalls 3
 
 /*
 * Gray = 1 / 50p
@@ -63,7 +64,7 @@ typedef struct brick
 extern SYSCALL sleept(int);
 extern struct intmap far* sys_imp;
 int receiver_pid, point_in_cycle, gcycle_length, gno_of_pids, front = -1, rear = -1, lvl2DrawerPID, lvl3DrawerPID;
-int sched_arr_pid[5] = { -1 }, sched_arr_int[5] = { -1 };
+int sched_arr_pid[15] = { -1 }, sched_arr_int[15] = { -1 }, ballPID[amountOfBalls];
 volatile int greenSurFlag, redSurFlag, left, right, sizeOfRacket, ballSpeed, perSpeed, BallOnRacket, surpriseIsDropped[10] = { 0 };
 volatile unsigned int score, mytod;
 volatile INTPROC  new_int9(int mdevno);
@@ -500,11 +501,17 @@ void DeleteLife()
 	{
 		if (--ballsCounter == 1)
 		{
-			j = 0;
+			for (i = 0; i < amountOfBalls; i++)
+				if (BallPosition[i].y < 24)
+				{
+					j = i;
+					break;
+				}
+			/*j = 0;
 			if (BallPosition[1].y < 24)
 				j = 1;
 			if (BallPosition[2].y < 24)
-				j = 2;
+				j = 2;*/
 			if (j != 0) // make the ball that left to be on the first index
 			{
 				BallPosition[0].x = BallPosition[j].x;
@@ -514,6 +521,7 @@ void DeleteLife()
 				ballUpdater(0);
 			}
 		}
+		kill(getpid());
 	}
 }
 
@@ -723,9 +731,13 @@ void redSurprise()
 
 void whiteSurprise()
 {
-	ballsCounter = 3;
-	BallPosition[1].x = BallPosition[2].x = BallPosition[0].x;
-	BallPosition[1].y = BallPosition[2].y = BallPosition[0].y;
+	int i;
+	ballsCounter = amountOfBalls;
+	for (i = 1; i < amountOfBalls; i++)
+	{
+		BallPosition[i].x = BallPosition[0].x;
+		BallPosition[i].y = BallPosition[0].y;
+	}
 	if (BallOnRacket)
 	{
 		BallsAndDirections[0][RightUp] = 1;
@@ -751,8 +763,8 @@ void whiteSurprise()
 			BallsAndDirections[2][LeftUp] = 1;
 		}
 	}
-	resume(create(ballUpdater, INITSTK, INITPRIO, "Ball2Updater", 1, 1));
-	resume(create(ballUpdater, INITSTK, INITPRIO, "Ball3Updater", 1, 2));
+	for (i = 1; i < amountOfBalls; i++)
+		resume(ballPID[i]);
 }
 
 void dropSur()
@@ -1463,7 +1475,7 @@ void initBrick()
 
 void xmain()
 {
-	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID, ballPID, dropSurPID;
+	int i, j, uppid, dispid, recvpid, frameDrawPID, lvlDrawerPID, dropSurPID;
 	InitializeGlobalVariables();
 	initBrick();
 	setInt70h();
@@ -1474,9 +1486,11 @@ void xmain()
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
-	resume(ballPID = create(ballUpdater, INITSTK, INITPRIO, "Ball1Updater", 1, 0));
+	resume(ballPID[0] = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 1, 0));
+	for (i = 1; i < amountOfBalls; i++) // creating the other balls
+		ballPID[i] = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 1, i);
 	resume(dropSurPID = create(dropSur, INITSTK, INITPRIO, "dropSur", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
-	schedule(5, 2, dispid, 0, uppid, 1, frameDrawPID, 1, ballPID, 1, dropSurPID, 1);
+	schedule(7, 2, dispid, 0, uppid, 1, frameDrawPID, 1, ballPID[0], 1, dropSurPID, 1, ballPID[1], 1, ballPID[2], 1);
 } // xmain

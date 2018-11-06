@@ -68,12 +68,12 @@ int mdevno;				/* minor device number		*/
 
 	for (i = 0; i < gno_of_pids; i++)
 	{
-		if (point_in_cycle == sched_arr_int[i] && i != 3 && i != 4)
+		if (point_in_cycle == sched_arr_int[i] && i != 3 && i != 4 && i != 5 && i != 6)
 		{
 			noresched_send(sched_arr_pid[i], 11);
 			resched_flag = 1;
 		} // if
-		else if (i == 3)
+		else if (i == 3 || i == 5 || i == 6)
 		{
 			if (tod % ballSpeed == 0)
 			{
