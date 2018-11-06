@@ -301,7 +301,7 @@ void DrawBall(int indexOfTheBall)
 void nextLevel(int levelNum)
 {
 	int i, j;
-	//RemoveBall();
+	RemoveBall(0);
 	if (levelNum == 1)
 	{
 		send(lvl2DrawerPID, 1);
@@ -441,11 +441,33 @@ void DrawRacket() /* drawing the racket on the screen */
 	}
 }
 
+void endGame()
+{
+	int i, j;
+	char* gameOverStr = "Game Over";
+	display_draft[5][PositionOfTheLastLife] = ' ';
+	display_draft[5][PositionOfTheLastLife + 1] = 0;
+	RemoveBall(0);
+	cleanScreen();
+	for (i = 0, j = 0; i < 18; i += 2, j++)
+	{
+		display_draft[15][42 + i] = gameOverStr[j];
+		display_draft[15][42 + 1 + i] = Purple;
+	}
+	for (i = 0; i < 4; i++)  //next level sounds
+	{
+		hertz = hertz2Arr[i];
+		Sound();
+		sleep(1);
+	}
+	NoSound();
+	hertz = 1060;
+}
+
 void ballUpdater(int indexOfTheBall);
 
 void DeleteLife()
 {
-	char* gameOverStr = "Game Over";
 	int i, j;
 	if (ballsCounter == 1)
 	{
@@ -471,23 +493,7 @@ void DeleteLife()
 		}
 		else
 		{
-			display_draft[5][PositionOfTheLastLife] = ' ';
-			display_draft[5][PositionOfTheLastLife + 1] = 0;
-			RemoveBall(0);
-			cleanScreen();
-			for (i = 0, j = 0; i < 18; i += 2, j++)
-			{
-				display_draft[16][42 + i] = gameOverStr[j];
-				display_draft[16][42 + 1 + i] = Purple;
-			}
-			for (i = 0; i < 4; i++)  //next level sounds
-			{
-				hertz = hertz2Arr[i];
-				Sound();
-				sleep(1);
-			}
-			NoSound();
-			hertz = 1060;
+			endGame();
 		}
 	}
 	else
@@ -1111,7 +1117,7 @@ void updateSurprises(int i, int j, color color)
 void resetBallAndRacketPositions()
 {
 	int i, j;
-	for (i = 2; i < 98; i+=2) // delete the whole racket
+	for (i = 2; i < 98; i += 2) // delete the whole racket
 	{
 		display_draft[24][i] = ' ';
 		display_draft[24][i + 1] = 0;
@@ -1129,6 +1135,7 @@ void resetBallAndRacketPositions()
 	for (i = 0; i < 3; i++)
 		for (j = 0; j < 4; j++)
 			BallsAndDirections[i][j] = 0;
+	RemoveBall(0);
 	BallPosition[0].x = 50; // 3730
 	BallPosition[0].y = 23;
 	BallOnRacket = 1;
