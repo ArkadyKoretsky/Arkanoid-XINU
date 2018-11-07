@@ -74,11 +74,12 @@ unsigned char far* b800h;
 volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 80, 50, 30 };
 char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
-char scoreStr[7];
-volatile int BallsAndDirections[3][4]; // BallsAndDirections[0][0..3] - the directions of the first (main) ball
+volatile char scoreStr[7];
+volatile int BallsAndDirections[amountOfBalls][4]; // BallsAndDirections[0][0..3] - the directions of the first (main) ball
 Brick matrix[25][80];
 Position BallPosition[3], surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
+bool ballIsActive[amountOfBalls] = { false };
 
 void interrupt myTimerISR(void)
 {
@@ -302,7 +303,9 @@ void DrawBall(int indexOfTheBall)
 void nextLevel(int levelNum)
 {
 	int i, j;
-	RemoveBall(0);
+	/*for (i = 0; i < amountOfBalls; i++)
+		if (ballIsActive[i])
+			RemoveBall(i);*/
 	if (levelNum == 1)
 	{
 		send(lvl2DrawerPID, 1);
@@ -343,7 +346,8 @@ void printScore(int score)
 {
 	int i, j;
 	//char nextLevelStr[30] = "Press F1 to next level";
-	sprintf(scoreStr, "%d", score);
+	itoa(score, scoreStr, 10);
+	//sprintf(scoreStr, "%d", score);
 	for (i = 128, j = 0; j < strlen(scoreStr); j++, i += 2)
 	{
 		display_draft[9][i] = scoreStr[j];
@@ -391,16 +395,16 @@ void drawSurprise(int index, color surpriseColor)
 
 void RemoveRacket(int direction)
 {
+	int i;
 	display_draft[24][RacketPosition + direction] = ' ';
 	display_draft[24][RacketPosition + direction + 1] = 0;
 	if (BallOnRacket)
 	{
-		if (ballsCounter > 1)
+		for (i = 0; i < amountOfBalls; i++)
 		{
-			RemoveBall(1);
-			RemoveBall(2);
+			if (ballIsActive[i])
+				RemoveBall(i);
 		}
-		RemoveBall(0);
 	}
 }
 
@@ -414,12 +418,11 @@ void removeDoubleRacket()
 	}
 	if (BallOnRacket)
 	{
-		if (ballsCounter > 1)
+		for (i = 0; i < amountOfBalls; i++)
 		{
-			RemoveBall(1);
-			RemoveBall(2);
+			if (ballIsActive[i])
+				RemoveBall(i);
 		}
-		RemoveBall(0);
 	}
 }
 
@@ -433,12 +436,11 @@ void DrawRacket() /* drawing the racket on the screen */
 	}
 	if (BallOnRacket)
 	{
-		if (ballsCounter > 1)
+		for (i = 0; i < amountOfBalls; i++)
 		{
-			DrawBall(1);
-			DrawBall(2);
+			if (ballIsActive[i])
+				DrawBall(i);
 		}
-		DrawBall(0);
 	}
 }
 
@@ -448,8 +450,12 @@ void endGame()
 	char* gameOverStr = "Game Over";
 	display_draft[5][PositionOfTheLastLife] = ' ';
 	display_draft[5][PositionOfTheLastLife + 1] = 0;
-	RemoveBall(0);
+	/*for (i = 0; i < amountOfBalls; i++)
+		if (ballIsActive[i])
+			RemoveBall(i);*/
 	cleanScreen();
+	gameOverStr = "Game Over";
+	gameOverStr = "Game Over";
 	for (i = 0, j = 0; i < 18; i += 2, j++)
 	{
 		display_draft[15][42 + i] = gameOverStr[j];
@@ -465,9 +471,14 @@ void endGame()
 	hertz = 1060;
 }
 
-void ballUpdater(int indexOfTheBall);
+void clearAllDirections(int indexOfTheBall)
+{
+	BallsAndDirections[indexOfTheBall][RightUp] = BallsAndDirections[indexOfTheBall][RightDown] = BallsAndDirections[indexOfTheBall][LeftUp] = BallsAndDirections[indexOfTheBall][LeftDown] = 0;
+	if (ballsCounter == 1)
+		BallOnRacket = 1;
+}
 
-void DeleteLife()
+void DeleteLife(int indexOfTheBall)
 {
 	int i, j;
 	if (ballsCounter == 1)
@@ -478,18 +489,17 @@ void DeleteLife()
 			display_draft[5][PositionOfTheLastLife] = ' ';
 			display_draft[5][PositionOfTheLastLife + 1] = 0;
 			PositionOfTheLastLife -= 2;
-			RemoveBall(0);
-			BallPosition[0].y = 23;
+			RemoveBall(indexOfTheBall);
+			BallPosition[indexOfTheBall].y = 23;
 			if (sizeOfRacket == 10)
 			{
-				BallPosition[0].x = RacketPosition + (sizeOfRacket / 2) - 1;
+				BallPosition[indexOfTheBall].x = RacketPosition + (sizeOfRacket / 2) - 1;
 			}
 			else
 			{
-				BallPosition[0].x = RacketPosition + (sizeOfRacket / 2);
+				BallPosition[indexOfTheBall].x = RacketPosition + (sizeOfRacket / 2);
 			}
-
-			DrawBall(0);
+			DrawBall(indexOfTheBall);
 			BallOnRacket = 1;
 		}
 		else
@@ -499,37 +509,12 @@ void DeleteLife()
 	}
 	else
 	{
-		if (--ballsCounter == 1)
-		{
-			for (i = 0; i < amountOfBalls; i++)
-				if (BallPosition[i].y < 24)
-				{
-					j = i;
-					break;
-				}
-			/*j = 0;
-			if (BallPosition[1].y < 24)
-				j = 1;
-			if (BallPosition[2].y < 24)
-				j = 2;*/
-			if (j != 0) // make the ball that left to be on the first index
-			{
-				BallPosition[0].x = BallPosition[j].x;
-				BallPosition[0].y = BallPosition[j].y;
-				for (i = 0; i < 4; i++)
-					BallsAndDirections[0][i] = BallsAndDirections[j][i]; // the j here is the index of the ball that didn't fall, it's not a reverse of rows and columns
-				ballUpdater(0);
-			}
-		}
-		kill(getpid());
+		RemoveBall(indexOfTheBall);
+		ballIsActive[indexOfTheBall] = false;
+		clearAllDirections(indexOfTheBall);
+		ballsCounter--;
+		suspend(getpid());
 	}
-}
-
-void clearAllDirections(int indexOfTheBall)
-{
-	BallsAndDirections[indexOfTheBall][RightUp] = BallsAndDirections[indexOfTheBall][RightDown] = BallsAndDirections[indexOfTheBall][LeftUp] = BallsAndDirections[indexOfTheBall][LeftDown] = 0;
-	if (ballsCounter == 1)
-		BallOnRacket = 1;
 }
 
 void BreakTheBrick(int i, int j, int type) //type 0 for ball and type 1 for lazer
@@ -582,7 +567,7 @@ void moveBallDownLeft(int indexOfTheBall)
 		if (BallPosition[indexOfTheBall].x == 2) // western wall
 			BallsAndDirections[indexOfTheBall][RightDown] = 1;
 		else if (BallPosition[indexOfTheBall].y > 23) // fell down
-			DeleteLife();
+			DeleteLife(indexOfTheBall);
 		else if (BallPosition[indexOfTheBall].x >= RacketPosition && BallPosition[indexOfTheBall].x <= RacketPosition + sizeOfRacket && BallPosition[indexOfTheBall].y + 1 == 24 && greenSurFlag == 1)
 		{
 			display_draft[22][134] = '1';
@@ -613,7 +598,7 @@ void moveBallDownRight(int indexOfTheBall)
 		if (BallPosition[indexOfTheBall].x == 98) // eastern wall
 			BallsAndDirections[indexOfTheBall][LeftDown] = 1;
 		else if (BallPosition[indexOfTheBall].y > 23) // fell down
-			DeleteLife();
+			DeleteLife(indexOfTheBall);
 		else if (BallPosition[indexOfTheBall].x >= RacketPosition && BallPosition[indexOfTheBall].x <= RacketPosition + sizeOfRacket && BallPosition[indexOfTheBall].y + 1 == 24 && greenSurFlag == 1)
 		{
 			display_draft[22][128] = '1';
@@ -729,42 +714,53 @@ void redSurprise()
 	redSurFlag = 0;
 }
 
+/* triple the ball */
 void whiteSurprise()
 {
-	int i;
+	int i, indexOfActiveBall;
 	ballsCounter = amountOfBalls;
-	for (i = 1; i < amountOfBalls; i++)
+	for (i = 0; i < amountOfBalls; i++) // find the active ball
 	{
-		BallPosition[i].x = BallPosition[0].x;
-		BallPosition[i].y = BallPosition[0].y;
-	}
-	if (BallOnRacket)
-	{
-		BallsAndDirections[0][RightUp] = 1;
-		BallsAndDirections[1][LeftUp] = 1;
-		BallPosition[2].x -= 2; // to make him fly straight
-		BallsAndDirections[2][RightUp] = 1;
-	}
-	else
-	{
-		if (BallsAndDirections[0][RightUp])
+		if (ballIsActive[i])
 		{
-			BallsAndDirections[1][LeftUp] = 1;
-			BallsAndDirections[2][LeftDown] = 1;
-		}
-		else if (BallsAndDirections[0][LeftUp])
-		{
-			BallsAndDirections[1][RightUp] = 1;
-			BallsAndDirections[2][RightDown] = 1;
-		}
-		else if (BallsAndDirections[0][RightDown] || BallsAndDirections[0][LeftDown])
-		{
-			BallsAndDirections[1][RightUp] = 1;
-			BallsAndDirections[2][LeftUp] = 1;
+			indexOfActiveBall = i;
+			break;
 		}
 	}
-	for (i = 1; i < amountOfBalls; i++)
-		resume(ballPID[i]);
+	for (i = 0; i < amountOfBalls; i++) // update the coordinates of the active ball for the other balls   
+	{
+		if (i != indexOfActiveBall)
+		{
+			BallPosition[i].x = BallPosition[indexOfActiveBall].x;
+			BallPosition[i].y = BallPosition[indexOfActiveBall].y;
+		}
+	}
+	if (!BallOnRacket)
+	{
+		if (BallsAndDirections[indexOfActiveBall][RightUp])
+		{
+			BallsAndDirections[(indexOfActiveBall + 1) % amountOfBalls][LeftUp] = 1;
+			BallsAndDirections[(indexOfActiveBall + 2) % amountOfBalls][LeftDown] = 1;
+		}
+		else if (BallsAndDirections[indexOfActiveBall][LeftUp])
+		{
+			BallsAndDirections[(indexOfActiveBall + 1) % amountOfBalls][RightUp] = 1;
+			BallsAndDirections[(indexOfActiveBall + 2) % amountOfBalls][RightDown] = 1;
+		}
+		else if (BallsAndDirections[indexOfActiveBall][RightDown] || BallsAndDirections[indexOfActiveBall][LeftDown])
+		{
+			BallsAndDirections[(indexOfActiveBall + 1) % amountOfBalls][RightUp] = 1;
+			BallsAndDirections[(indexOfActiveBall + 2) % amountOfBalls][LeftUp] = 1;
+		}
+	}
+	for (i = 0; i < amountOfBalls; i++) // activate the suspended balls
+	{
+		if (!ballIsActive[i])
+		{
+			ballIsActive[i] = true;
+			resume(ballPID[i]);
+		}
+	}
 }
 
 void dropSur()
@@ -975,7 +971,7 @@ void displayer(void)
 void updater()
 {
 	char ch;
-	int i, j;
+	int i, j, indexOfActiveBall;
 	while (1)
 	{
 		receive();
@@ -991,12 +987,9 @@ void updater()
 				RemoveRacket(right);
 				if (BallOnRacket)
 				{
-					if (ballsCounter > 1)
-					{
-						BallPosition[1].x -= 2;
-						BallPosition[2].x -= 2;
-					}
-					BallPosition[0].x -= 2;
+					for (i = 0; i < amountOfBalls; i++)
+						if (ballIsActive[i])
+							BallPosition[i].x -= 2;
 				}
 				RacketPosition -= 2;
 				DrawRacket();
@@ -1006,12 +999,9 @@ void updater()
 				RemoveRacket(left);
 				if (BallOnRacket)
 				{
-					if (ballsCounter > 1)
-					{
-						BallPosition[1].x += 2;
-						BallPosition[2].x += 2;
-					}
-					BallPosition[0].x += 2;
+					for (i = 0; i < amountOfBalls; i++)
+						if (ballIsActive[i])
+							BallPosition[i].x += 2;
 				}
 				RacketPosition += 2;
 				DrawRacket();
@@ -1032,12 +1022,22 @@ void updater()
 				if (BallOnRacket)
 				{
 					BallOnRacket = 0;
+					for (i = 0; i < amountOfBalls; i++)
+					{
+						if (ballIsActive[i])
+						{
+							indexOfActiveBall = i;
+							break;
+						}
+					}
 					if (ballsCounter > 1)
 					{
-						BallsAndDirections[1][LeftUp] = 1;
-						BallsAndDirections[2][RightUp] = 1;
+						BallsAndDirections[(indexOfActiveBall + 1) % amountOfBalls][LeftUp] = 1;
+						BallsAndDirections[(indexOfActiveBall + 2) % amountOfBalls][RightUp] = 1;
+						BallPosition[indexOfActiveBall].x -= 6;
+						sleep(1); // to make the third ball fly in a little different angle
 					}
-					BallsAndDirections[0][RightUp] = 1;
+					BallsAndDirections[indexOfActiveBall][RightUp] = 1;
 				}
 				if (redSurFlag)
 					resume(create(lazer, INITSTK, INITPRIO, "Lazer", 0));
@@ -1134,24 +1134,26 @@ void resetBallAndRacketPositions()
 		display_draft[24][i] = ' ';
 		display_draft[24][i + 1] = 0;
 	}
-	RacketPosition = 46; // 3886
-	DrawRacket();
-	if (ballsCounter > 1)
+	for (i = 0; i < amountOfBalls; i++) // reset all the balls
 	{
-		RemoveBall(1);
-		RemoveBall(2);
-		ballsCounter = 1;
+		if (ballIsActive[i])
+		{
+			RemoveBall(i);
+			ballIsActive[i] = false;
+			suspend(ballPID[i]);
+		}
 	}
-	if (level != 1)
-		RemoveBall(0);
+	ballsCounter = 1;
 	for (i = 0; i < 3; i++)
 		for (j = 0; j < 4; j++)
-			BallsAndDirections[i][j] = 0;
-	RemoveBall(0);
+			BallsAndDirections[i][j] = 0; // reset all the ball's directions 
+	ballIsActive[0] = true;
 	BallPosition[0].x = 50; // 3730
 	BallPosition[0].y = 23;
 	BallOnRacket = 1;
-	DrawBall(0);
+	RacketPosition = 46; // 3886
+	DrawRacket();
+	resume(ballPID[0]);
 }
 
 void lvl3Drawer()  //draw the second level
@@ -1432,7 +1434,6 @@ void InitializeGlobalVariables()
 	b800h = (unsigned char far*)0xB8000000;
 	PositionOfTheLastLife = 132;
 	lifeCounter = 3;
-	ballsCounter = 1;
 	sizeOfRacket = 10;
 	right = 8;
 	left = 0;
@@ -1479,6 +1480,8 @@ void xmain()
 	InitializeGlobalVariables();
 	initBrick();
 	setInt70h();
+	for (i = 0; i < amountOfBalls; i++) // creating the balls
+		ballPID[i] = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 1, i);
 	resume(lvlDrawerPID = create(lvlDrawer, INITSTK, INITPRIO, "lvlDrawer", 0));
 	resume(lvl2DrawerPID = create(lvl2Drawer, INITSTK, INITPRIO, "lvl2Drawer", 0));
 	resume(lvl3DrawerPID = create(lvl3Drawer, INITSTK, INITPRIO, "lvl3Drawer", 0));
@@ -1486,9 +1489,6 @@ void xmain()
 	resume(dispid = create(displayer, INITSTK, INITPRIO, "DISPLAYER", 0));
 	resume(recvpid = create(receiver, INITSTK, INITPRIO + 3, "RECIVEVER", 0));
 	resume(uppid = create(updater, INITSTK, INITPRIO, "UPDATER", 0));
-	resume(ballPID[0] = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 1, 0));
-	for (i = 1; i < amountOfBalls; i++) // creating the other balls
-		ballPID[i] = create(ballUpdater, INITSTK, INITPRIO, "BallUpdater", 1, i);
 	resume(dropSurPID = create(dropSur, INITSTK, INITPRIO, "dropSur", 0));
 	receiver_pid = recvpid;
 	set_new_int9_newisr();
