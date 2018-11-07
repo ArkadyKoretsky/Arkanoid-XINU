@@ -68,7 +68,7 @@ int mdevno;				/* minor device number		*/
 
 	for (i = 0; i < gno_of_pids; i++)
 	{
-		if (point_in_cycle == sched_arr_int[i] && i != 3 && i != 4 && i != 5 && i != 6)
+		if (point_in_cycle == sched_arr_int[i] && i != 3 && i != 4 && i != 5 && i != 6 && i != 7 && i != 8)
 		{
 			noresched_send(sched_arr_pid[i], 11);
 			resched_flag = 1;
@@ -84,6 +84,22 @@ int mdevno;				/* minor device number		*/
 		else if (i == 4)
 		{
 			if (tod % 30 == 0)
+			{
+				noresched_send(sched_arr_pid[i], 11);
+				resched_flag = 1;
+			}
+		}
+		else if (i == 7)
+		{
+			if (tod % 20 == 0)
+			{
+				noresched_send(sched_arr_pid[i], 11);
+				resched_flag = 1;
+			}
+		}
+		else if (i == 8)
+		{
+			if (tod % 40 == 0)
 			{
 				noresched_send(sched_arr_pid[i], 11);
 				resched_flag = 1;
