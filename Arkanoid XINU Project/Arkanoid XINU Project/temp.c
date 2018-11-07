@@ -1,18 +1,53 @@
-while(1)
+
+
+void drawMonster(int i, int j)
+{
+	display_draft[i][j] = 219;
+	display_draft[i][j + 1] = 3;
+}
+
+
+void removeMonster(int i, int j)
+{
+	display_draft[i][j] = ' ';
+	display_draft[i][j + 1] = 0;
+}
+
+void monsterA()
+{
+	int i = 2, j = 1;
+	if (flagA)
+	{
+		while (1)
 		{
-			randNum1 = (rand() % 96) +2;
-			if (randNum1 % 2 == 0)
-			{
-				randNum2= (rand() % 2)+1;
-				display_draft[randNum2][randNum1] = 219;
-				display_draft[randNum2][randNum1+1] = 3;
-				sleep(1);
-				display_draft[randNum2][randNum1] = ' ';
-				display_draft[randNum2][randNum1+1] = 0;
-			}
-				
-		
+			randNum1 = (rand() % 4) + 1
+				switch (randNum1)
+				{
+				case 1:				//move up
+					drawMonster(i - 1, j);
+					receive();
+					removeMonster(i - 1, j);
+					break;
+				case 2:				//move left
+					drawMonster(i, j - 2);
+					receive();
+					removeMonster(i, j - 2);
+					break;
+				case 3:				//move down
+					drawMonster(i + 1, j);
+					receive();
+					removeMonster(i + 1, j);
+					break;
+				case 4:				//move right
+					drawMonster(i, j + 2);
+					receive();
+					removeMonster(i, j + 2);
+					break;
+				}
 		}
+	}
+}
+
 
 #include <conf.h>
 #include <kernel.h>
