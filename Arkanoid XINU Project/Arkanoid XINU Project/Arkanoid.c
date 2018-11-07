@@ -71,7 +71,7 @@ volatile INTPROC  new_int9(int mdevno);
 volatile char display_draft[25][160];
 volatile int RacketPosition, PositionOfTheLastLife, lifeCounter, surprisesIndex, ballsCounter;
 unsigned char far* b800h;
-volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 80, 50, 30 }, hertz3Arr[4] = { 100, 150, 120, 160 };
+volatile int hertz, hertz1Arr[4] = { 1000, 1200, 1100, 1000 }, hertz2Arr[4] = { 100, 80, 50, 30 }, hertz3Arr[6] = { 100, 150, 120, 160 , 100, 50 };
 char display[4001], ch_arr[2048], old_021h_mask, old_0A1h_mask, old_70h_A_mask;
 volatile int changeLevel1Flag, changeLevel2Flag, level;
 volatile char scoreStr[7];
@@ -79,7 +79,7 @@ volatile int BallsAndDirections[amountOfBalls][4]; // BallsAndDirections[0][0..3
 Brick matrix[25][80];
 Position BallPosition[3], surprisePosition[10] = { 0 };
 color surpriseColor[10] = { 0 };
-bool ballIsActive[amountOfBalls] = { false }, activeSurprise;
+bool ballIsActive[amountOfBalls] = { false }, activeSurprise, gameOver;
 
 void ChangeSpeaker(int status)	//change the status of the speaker
 {
@@ -272,14 +272,17 @@ void drawSurprise(int index, color surpriseColor)   //drawing surprise
 void RemoveRacket(int direction)  //remove racket
 {
 	int i;
-	display_draft[24][RacketPosition + direction] = ' ';
-	display_draft[24][RacketPosition + direction + 1] = 0;
-	if (BallOnRacket)
+	if (!gameOver)
 	{
-		for (i = 0; i < amountOfBalls; i++)
+		display_draft[24][RacketPosition + direction] = ' ';
+		display_draft[24][RacketPosition + direction + 1] = 0;
+		if (BallOnRacket)
 		{
-			if (ballIsActive[i])
-				RemoveBall(i);
+			for (i = 0; i < amountOfBalls; i++)
+			{
+				if (ballIsActive[i])
+					RemoveBall(i);
+			}
 		}
 	}
 }
@@ -287,17 +290,20 @@ void RemoveRacket(int direction)  //remove racket
 void removeDoubleRacket()	//remove the double size racket
 {
 	int i;
-	for (i = 0; i < 10; i += 2)
+	if (!gameOver)
 	{
-		display_draft[24][RacketPosition + 10 + i] = ' ';
-		display_draft[24][RacketPosition + 10 + i + 1] = 0;
-	}
-	if (BallOnRacket)
-	{
-		for (i = 0; i < amountOfBalls; i++)
+		for (i = 0; i < 10; i += 2)
 		{
-			if (ballIsActive[i])
-				RemoveBall(i);
+			display_draft[24][RacketPosition + 10 + i] = ' ';
+			display_draft[24][RacketPosition + 10 + i + 1] = 0;
+		}
+		if (BallOnRacket)
+		{
+			for (i = 0; i < amountOfBalls; i++)
+			{
+				if (ballIsActive[i])
+					RemoveBall(i);
+			}
 		}
 	}
 }
@@ -305,17 +311,20 @@ void removeDoubleRacket()	//remove the double size racket
 void DrawRacket() /* drawing the racket on the screen */
 {
 	int i;
-	for (i = 0; i < sizeOfRacket; i += 2)
+	if (!gameOver)
 	{
-		display_draft[24][RacketPosition + i] = 220;
-		display_draft[24][RacketPosition + i + 1] = 112;
-	}
-	if (BallOnRacket)
-	{
-		for (i = 0; i < amountOfBalls; i++)
+		for (i = 0; i < sizeOfRacket; i += 2)
 		{
-			if (ballIsActive[i])
-				DrawBall(i);
+			display_draft[24][RacketPosition + i] = 220;
+			display_draft[24][RacketPosition + i + 1] = 112;
+		}
+		if (BallOnRacket)
+		{
+			for (i = 0; i < amountOfBalls; i++)
+			{
+				if (ballIsActive[i])
+					DrawBall(i);
+			}
 		}
 	}
 }
@@ -324,6 +333,7 @@ void endGame() //ending game function
 {
 	int i, j;
 	char* gameOverStr = "Game Over";
+	gameOver = true;
 	display_draft[5][PositionOfTheLastLife] = ' ';
 	display_draft[5][PositionOfTheLastLife + 1] = 0;
 	cleanScreen();
@@ -1164,13 +1174,8 @@ void lvl3Drawer()  //draw the second level
 			updateBrickMatrix(i, j / 2, true, 650, 60);
 			display_draft[i][j + 1] = Purple;
 		}
-		display_draft[23][150] = '1';
-		display_draft[23][151] = Yellow;
-		i = 15;
-		updateSurprises(7, i / 2, Yellow);
-		updateSurprises(7, (i + 1) / 2, Yellow);
-		updateSurprises(7, (i + 3) / 2, Yellow);
-		updateSurprises(7, (i + 4) / 2, Yellow);
+		updateSurprises(7, 36, Yellow);
+		updateSurprises(7, 27, Gray);
 	}
 	resetBallAndRacketPositions();
 }
@@ -1241,7 +1246,7 @@ void lvl2Drawer()  //draw the second level
 					else if (i == 2)
 					{
 						display_draft[i][j + 1] = Blue;
-						updateBrickMatrix(i, j / 2, true, 2, 80);
+						updateBrickMatrix(i, j / 2, true, 2, 70);
 						switch (j % 29)
 						{
 						case 15:
@@ -1277,7 +1282,7 @@ void lvlDrawer()  //draw the first level
 					if (i == 3)
 					{
 						display_draft[i][j + 1] = Gray;
-						updateBrickMatrix(i, j / 2, true, 1, 60);
+						updateBrickMatrix(i, j / 2, true, 1, 50);
 					}
 					else if (i == 4)
 					{
@@ -1387,7 +1392,7 @@ void InitializeGlobalVariables()
 	level = 1;
 	ballSpeed = 15;
 	perSpeed = 30;
-	activeSurprise = false;
+	gameOver = activeSurprise = false;
 	asm{
 		PUSH AX
 		PUSH BX
@@ -1403,8 +1408,7 @@ void InitializeGlobalVariables()
 	}
 }
 
-/* every monster always checks if the ball is hitting it */
-void checkHit(int i, int j, int monsterPID)
+void checkHit(int i, int j, int monsterPID) /* every monster always checks if the ball is hitting it */
 {
 	if (display_draft[BallPosition[0].y][BallPosition[0].x] == display_draft[i - 1][j - 2])
 	{
